@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Halı Yıkama</title>
+
+  <!-- PWA ayarları -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1565c0">
+
+  <!-- iPhone için ana ekran ayarları -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Halı Yıkama">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Üst başlık çubuğu -->
+  <header class="ust-bar">
+    <button id="geri-butonu" class="ust-buton" aria-label="Geri" hidden>‹ Geri</button>
+    <h1 id="sayfa-basligi">Halı Yıkama</h1>
+    <button id="ayarlar-butonu" class="ust-buton" aria-label="Ayarlar">⚙︎</button>
+  </header>
+
+  <main>
+
+    <!-- EKRAN 1: Müşteri listesi (ana ekran) -->
+    <section id="ekran-musteriler" class="ekran" hidden>
+      <div class="ozet-kart">
+        <span class="ozet-sayi" id="bekleyen-sayisi">0</span>
+        <span class="ozet-yazi">bekleyen sipariş<br><small>(teslim edilmemiş)</small></span>
+      </div>
+
+      <div class="yedek-kart" id="yedek-kart">
+        <span id="yedek-yazisi" class="yedek-yazisi"></span>
+        <button class="buton buton-kucuk" id="simdi-yedekle-butonu">Şimdi Yedekle</button>
+      </div>
+
+      <input type="search" id="arama-kutusu" class="arama" placeholder="İsim, telefon veya adres ile ara..." autocomplete="off">
+
+      <button class="buton buton-ana" id="yeni-musteri-butonu">+ Yeni Müşteri</button>
+
+      <ul id="musteri-listesi" class="liste"></ul>
+      <p id="musteri-yok" class="bos-mesaj" hidden>Henüz müşteri yok.</p>
+    </section>
+
+    <!-- EKRAN 2: Müşteri detayı ve siparişleri -->
+    <section id="ekran-musteri-detay" class="ekran" hidden>
+      <div class="kart">
+        <h2 id="detay-isim"></h2>
+        <a id="detay-telefon" class="telefon-link" href="#"></a>
+        <p id="detay-adres" class="adres"></p>
+        <div class="buton-satiri">
+          <button class="buton" id="musteri-duzenle-butonu">Düzenle</button>
+          <button class="buton buton-tehlike" id="musteri-sil-butonu">Sil</button>
+        </div>
+      </div>
+
+      <h3 class="bolum-basligi">Siparişler</h3>
+      <button class="buton buton-ana" id="yeni-siparis-butonu">+ Yeni Sipariş</button>
+      <ul id="siparis-listesi" class="liste"></ul>
+      <p id="siparis-yok" class="bos-mesaj" hidden>Bu müşterinin henüz siparişi yok.</p>
+    </section>
+
+    <!-- EKRAN 3: Müşteri ekleme / düzenleme formu -->
+    <section id="ekran-musteri-formu" class="ekran" hidden>
+      <form id="musteri-formu" class="form">
+        <label>Ad
+          <input type="text" name="ad" required autocomplete="off">
+        </label>
+        <label>Soyad
+          <input type="text" name="soyad" required autocomplete="off">
+        </label>
+        <label>Telefon
+          <input type="tel" name="telefon" required placeholder="05XX XXX XX XX" autocomplete="off">
+        </label>
+        <label>Adres
+          <textarea name="adres" rows="3"></textarea>
+        </label>
+        <button type="submit" class="buton buton-ana">Kaydet</button>
+      </form>
+    </section>
+
+    <!-- EKRAN 4: Sipariş ekleme / düzenleme formu -->
+    <section id="ekran-siparis-formu" class="ekran" hidden>
+      <form id="siparis-formu" class="form">
+        <p class="form-musteri" id="siparis-formu-musteri"></p>
+        <label>Tarih
+          <input type="date" name="tarih" required>
+        </label>
+        <label>Halı metrekaresi (m²)
+          <input type="text" name="metrekare" inputmode="decimal" required placeholder="Örn: 6,5" autocomplete="off">
+        </label>
+        <label>Durum
+          <select name="durum"></select>
+        </label>
+        <label class="onay-kutusu">
+          <input type="checkbox" name="odemeAlindi">
+          Ödeme alındı
+        </label>
+        <div class="tutar-kutusu">
+          <div>Birim fiyat: <strong id="form-birim-fiyat"></strong> / m²</div>
+          <div class="tutar-buyuk">Toplam: <strong id="form-toplam">0,00 ₺</strong></div>
+        </div>
+        <button type="submit" class="buton buton-ana">Kaydet</button>
+      </form>
+    </section>
+
+    <!-- EKRAN 5: Ayarlar -->
+    <section id="ekran-ayarlar" class="ekran" hidden>
+      <form id="ayarlar-formu" class="form kart">
+        <label>Metrekare birim fiyatı (₺)
+          <input type="text" name="birimFiyat" inputmode="decimal" required autocomplete="off">
+        </label>
+        <p class="aciklama">Fiyat değişikliği sadece yeni siparişleri etkiler. Eski siparişler kendi fiyatlarını korur.</p>
+        <button type="submit" class="buton buton-ana">Fiyatı Kaydet</button>
+      </form>
+
+      <div class="kart">
+        <h3>Yedekleme</h3>
+        <p class="aciklama">Tüm veriler sadece bu cihazda durur. Telefon değiştirmeden veya tarayıcı verisini silmeden önce mutlaka yedek alın.</p>
+        <button class="buton" id="yedek-indir-butonu">Yedeği İndir</button>
+        <button class="buton" id="yedek-yukle-butonu">Yedekten Geri Yükle</button>
+        <input type="file" id="yedek-dosyasi" accept=".json,application/json" hidden>
+      </div>
+
+      <p class="surum" id="surum-bilgisi"></p>
+    </section>
+
+  </main>
+
+  <!-- Kısa bilgi mesajı ("Kaydedildi" gibi) -->
+  <div id="bildirim" class="bildirim" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

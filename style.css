@@ -1,0 +1,449 @@
+/* ===== Genel ayarlar ===== */
+:root {
+  --ana-renk: #1565c0;
+  --ana-renk-koyu: #0d47a1;
+  --tehlike: #c62828;
+  --basari: #2e7d32;
+  --arka-plan: #f2f4f7;
+  --kart: #ffffff;
+  --yazi: #1f2933;
+  --soluk-yazi: #616e7c;
+  --cizgi: #d9dee4;
+  --kose: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--arka-plan);
+  color: var(--yazi);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 17px;
+  line-height: 1.4;
+  -webkit-tap-highlight-color: transparent;
+}
+
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+  /* iPhone'un alt çubuğu için boşluk */
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+}
+
+/* ===== Üst başlık ===== */
+.ust-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ana-renk);
+  color: #fff;
+  /* iPhone çentiği için üst boşluk */
+  padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
+  min-height: 60px;
+}
+
+.ust-bar h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 20px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ust-buton {
+  min-width: 72px;
+  min-height: 48px;
+  border: none;
+  border-radius: var(--kose);
+  background: transparent;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.ust-buton:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Geri butonu gizliyken ayarlar butonu sağda kalsın diye yer tutucu */
+#geri-butonu[hidden] {
+  display: block;
+  visibility: hidden;
+}
+
+/* ===== Butonlar ===== */
+.buton {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  margin: 8px 0;
+  padding: 12px 16px;
+  border: 2px solid var(--ana-renk);
+  border-radius: var(--kose);
+  background: #fff;
+  color: var(--ana-renk);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.buton:active {
+  transform: scale(0.98);
+}
+
+.buton-ana {
+  background: var(--ana-renk);
+  color: #fff;
+}
+
+.buton-ana:active {
+  background: var(--ana-renk-koyu);
+}
+
+.buton-tehlike {
+  border-color: var(--tehlike);
+  color: var(--tehlike);
+}
+
+.buton-kucuk {
+  min-height: 48px;
+  margin: 0;
+  font-size: 16px;
+}
+
+.buton-satiri {
+  display: flex;
+  gap: 8px;
+}
+
+.buton-satiri .buton {
+  flex: 1;
+}
+
+/* ===== Kartlar ve listeler ===== */
+.kart {
+  background: var(--kart);
+  border-radius: var(--kose);
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.kart h2, .kart h3 {
+  margin: 0 0 8px;
+}
+
+.liste {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.liste > li {
+  background: var(--kart);
+  border-radius: var(--kose);
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Müşteri listesindeki her satır bir butondur */
+.musteri-satiri {
+  display: block;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.musteri-adi {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.musteri-alt {
+  color: var(--soluk-yazi);
+  font-size: 15px;
+}
+
+.rozet {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fff3e0;
+  color: #e65100;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bos-mesaj {
+  text-align: center;
+  color: var(--soluk-yazi);
+  padding: 24px 0;
+}
+
+.bolum-basligi {
+  margin: 24px 0 4px;
+}
+
+/* ===== Özet kartı (ana ekran) ===== */
+.ozet-kart {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--kart);
+  border-left: 6px solid #ef6c00;
+  border-radius: var(--kose);
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.ozet-sayi {
+  font-size: 40px;
+  font-weight: 700;
+  color: #ef6c00;
+  min-width: 48px;
+  text-align: center;
+}
+
+.ozet-yazi {
+  font-size: 18px;
+}
+
+.ozet-yazi small {
+  color: var(--soluk-yazi);
+  font-size: 14px;
+}
+
+/* ===== Yedek hatırlatıcısı (ana ekran) ===== */
+.yedek-kart {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--kart);
+  border-left: 6px solid var(--basari);
+  border-radius: var(--kose);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.yedek-yazisi {
+  flex: 1;
+  font-size: 16px;
+}
+
+.yedek-kart .buton {
+  width: auto;
+  flex-shrink: 0;
+}
+
+/* Hiç yedek yoksa veya 7 günden eskiyse kırmızı uyarı */
+.yedek-kart.uyari {
+  background: #ffebee;
+  border-left-color: var(--tehlike);
+}
+
+.yedek-kart.uyari .yedek-yazisi {
+  color: var(--tehlike);
+  font-weight: 700;
+}
+
+.yedek-kart.uyari .buton {
+  background: var(--tehlike);
+  border-color: var(--tehlike);
+  color: #fff;
+}
+
+/* ===== Müşteri detayı ===== */
+.telefon-link {
+  display: inline-block;
+  min-height: 48px;
+  padding: 10px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ana-renk);
+  text-decoration: none;
+}
+
+.telefon-link::before {
+  content: "📞 ";
+}
+
+.adres {
+  margin: 0 0 8px;
+  color: var(--soluk-yazi);
+  white-space: pre-line;
+}
+
+/* ===== Sipariş kartı ===== */
+.siparis {
+  padding: 14px 16px;
+}
+
+.siparis-ust {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.siparis-tarih {
+  font-weight: 600;
+}
+
+.siparis-tutar {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.siparis-detay {
+  color: var(--soluk-yazi);
+  font-size: 15px;
+  margin: 2px 0 10px;
+}
+
+.siparis select {
+  margin-bottom: 8px;
+}
+
+.odeme-butonu.odendi {
+  background: var(--basari);
+  border-color: var(--basari);
+  color: #fff;
+}
+
+.odeme-butonu.odenmedi {
+  border-color: var(--tehlike);
+  color: var(--tehlike);
+}
+
+/* Durum renkleri (sipariş kartının sol kenarı) */
+.durum-teslim-alindi  { border-left: 6px solid #6d7a88; }
+.durum-yikaniyor      { border-left: 6px solid #1e88e5; }
+.durum-hazir          { border-left: 6px solid #ef6c00; }
+.durum-teslim-edildi  { border-left: 6px solid var(--basari); opacity: 0.85; }
+
+/* ===== Formlar ===== */
+.form label {
+  display: block;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
+.form input[type="text"],
+.form input[type="tel"],
+.form input[type="date"],
+.form textarea,
+select,
+.arama {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 6px;
+  padding: 12px;
+  border: 2px solid var(--cizgi);
+  border-radius: var(--kose);
+  background: #fff;
+  color: var(--yazi);
+  /* 16px'ten küçük yazı iPhone'da otomatik yakınlaştırma yapar */
+  font-size: 18px;
+  font-family: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+select {
+  background-image: linear-gradient(45deg, transparent 50%, var(--soluk-yazi) 50%),
+                    linear-gradient(135deg, var(--soluk-yazi) 50%, transparent 50%);
+  background-position: calc(100% - 22px) 50%, calc(100% - 16px) 50%;
+  background-size: 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 40px;
+}
+
+.form input:focus,
+.form textarea:focus,
+select:focus,
+.arama:focus {
+  outline: none;
+  border-color: var(--ana-renk);
+}
+
+.arama {
+  margin: 0 0 4px;
+}
+
+.onay-kutusu {
+  display: flex !important;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+}
+
+.onay-kutusu input {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+}
+
+.form-musteri {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+
+.tutar-kutusu {
+  background: #e3f2fd;
+  border-radius: var(--kose);
+  padding: 14px 16px;
+  margin-bottom: 8px;
+}
+
+.tutar-buyuk {
+  font-size: 22px;
+  margin-top: 4px;
+}
+
+.aciklama {
+  color: var(--soluk-yazi);
+  font-size: 15px;
+}
+
+.surum {
+  text-align: center;
+  color: var(--soluk-yazi);
+  font-size: 13px;
+}
+
+/* ===== Bildirim (alttan çıkan kısa mesaj) ===== */
+.bildirim {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  max-width: 90%;
+  padding: 12px 20px;
+  border-radius: 999px;
+  background: #323f4b;
+  color: #fff;
+  font-size: 16px;
+  z-index: 20;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
