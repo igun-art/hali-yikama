@@ -25,23 +25,73 @@
   <header class="ust-bar">
     <button id="geri-butonu" class="ust-buton" aria-label="Geri" hidden>‹ Geri</button>
     <h1 id="sayfa-basligi">Halı Yıkama</h1>
-    <button id="ayarlar-butonu" class="ust-buton" aria-label="Ayarlar">⚙︎</button>
+    <span class="ust-bosluk"></span>
   </header>
 
   <main>
 
-    <!-- EKRAN 1: Müşteri listesi (ana ekran) -->
-    <section id="ekran-musteriler" class="ekran" hidden>
-      <div class="ozet-kart">
-        <span class="ozet-sayi" id="bekleyen-sayisi">0</span>
-        <span class="ozet-yazi">bekleyen sipariş<br><small>(teslim edilmemiş)</small></span>
+    <!-- ===== SEKME 1: ANA EKRAN ===== -->
+    <section id="ekran-ana" class="ekran" hidden>
+      <!-- Her durum için bir satır (app.js doldurur) -->
+      <ul id="durum-satirlari" class="liste durum-listesi"></ul>
+
+      <div class="hizli-erisim">
+        <button class="buton hizli-buton" data-adres="/gun-ozeti">Gün Özeti</button>
+        <button class="buton hizli-buton" data-adres="/gider-formu">Gider Ekle</button>
+        <button class="buton hizli-buton" data-adres="/siparis-bul">Sipariş Bul</button>
       </div>
 
       <div class="yedek-kart" id="yedek-kart">
         <span id="yedek-yazisi" class="yedek-yazisi"></span>
         <button class="buton buton-kucuk" id="simdi-yedekle-butonu">Şimdi Yedekle</button>
       </div>
+    </section>
 
+    <!-- Bir durumdaki siparişlerin listesi (örn. "Yıkamada") -->
+    <section id="ekran-durum" class="ekran" hidden>
+      <ul id="durum-siparisleri" class="liste siparis-satirlari"></ul>
+      <p id="durum-bos" class="bos-mesaj" hidden></p>
+    </section>
+
+    <!-- Gün özeti -->
+    <section id="ekran-gun-ozeti" class="ekran" hidden>
+      <p id="gun-tarihi" class="aralik-yazisi"></p>
+      <div id="gun-ozeti-kartlari" class="ozet-izgara"></div>
+      <h3 class="bolum-basligi">Bugünün siparişleri</h3>
+      <ul id="gun-siparisleri" class="liste siparis-satirlari"></ul>
+      <p id="gun-bos" class="bos-mesaj" hidden>Bugün tarihli sipariş yok.</p>
+    </section>
+
+    <!-- Gider ekleme formu -->
+    <section id="ekran-gider-formu" class="ekran" hidden>
+      <form id="gider-formu" class="form">
+        <label>Tarih
+          <input type="date" name="tarih" required>
+        </label>
+        <label>Tutar (₺)
+          <input type="text" name="tutar" inputmode="decimal" required placeholder="Örn: 450" autocomplete="off">
+        </label>
+        <label>Açıklama
+          <input type="text" name="aciklama" placeholder="Örn: Deterjan, yakıt, kira" autocomplete="off">
+        </label>
+        <button type="submit" class="buton buton-ana">Gideri Kaydet</button>
+      </form>
+    </section>
+
+    <!-- Sipariş numarasıyla arama -->
+    <section id="ekran-siparis-bul" class="ekran" hidden>
+      <form id="siparis-bul-formu" class="form">
+        <label>Sipariş numarası
+          <input type="text" name="no" inputmode="numeric" required placeholder="Örn: 27" autocomplete="off">
+        </label>
+        <button type="submit" class="buton buton-ana">Bul</button>
+      </form>
+      <p id="bul-sonuc" class="bul-sonuc" hidden></p>
+      <p class="aciklama">Sipariş numarası, sipariş kartlarında # işaretiyle yazar (örn. #27).</p>
+    </section>
+
+    <!-- ===== SEKME 2: MÜŞTERİLER ===== -->
+    <section id="ekran-musteriler" class="ekran" hidden>
       <input type="search" id="arama-kutusu" class="arama" placeholder="İsim, telefon veya adres ile ara..." autocomplete="off">
 
       <button class="buton buton-ana" id="yeni-musteri-butonu">+ Yeni Müşteri</button>
@@ -50,7 +100,7 @@
       <p id="musteri-yok" class="bos-mesaj" hidden>Henüz müşteri yok.</p>
     </section>
 
-    <!-- EKRAN 2: Müşteri detayı ve siparişleri -->
+    <!-- Müşteri detayı ve siparişleri -->
     <section id="ekran-musteri-detay" class="ekran" hidden>
       <div class="kart">
         <h2 id="detay-isim"></h2>
@@ -68,7 +118,7 @@
       <p id="siparis-yok" class="bos-mesaj" hidden>Bu müşterinin henüz siparişi yok.</p>
     </section>
 
-    <!-- EKRAN 3: Müşteri ekleme / düzenleme formu -->
+    <!-- Müşteri ekleme / düzenleme formu -->
     <section id="ekran-musteri-formu" class="ekran" hidden>
       <form id="musteri-formu" class="form">
         <label>Ad
@@ -87,7 +137,7 @@
       </form>
     </section>
 
-    <!-- EKRAN 4: Sipariş ekleme / düzenleme formu -->
+    <!-- Sipariş ekleme / düzenleme formu -->
     <section id="ekran-siparis-formu" class="ekran" hidden>
       <form id="siparis-formu" class="form">
         <p class="form-musteri" id="siparis-formu-musteri"></p>
@@ -112,7 +162,26 @@
       </form>
     </section>
 
-    <!-- EKRAN 5: Ayarlar -->
+    <!-- ===== SEKME 3: YÖNETİCİ ===== -->
+    <section id="ekran-yonetici" class="ekran" hidden>
+      <div class="donem-secici" id="donem-secici">
+        <button data-donem="bugun">Bugün</button>
+        <button data-donem="hafta">Bu Hafta</button>
+        <button data-donem="ay">Bu Ay</button>
+        <button data-donem="tumu">Tümü</button>
+      </div>
+      <p id="donem-araligi" class="aralik-yazisi"></p>
+      <div id="yonetici-kartlari" class="ozet-izgara"></div>
+
+      <h3 class="bolum-basligi">Giderler</h3>
+      <button class="buton" id="yonetici-gider-ekle">+ Gider Ekle</button>
+      <ul id="gider-listesi" class="liste"></ul>
+      <p id="gider-yok" class="bos-mesaj" hidden>Bu dönemde gider yok.</p>
+
+      <button class="buton" id="ayarlara-git">Ayarlar (fiyat ve yedekleme)</button>
+    </section>
+
+    <!-- Ayarlar -->
     <section id="ekran-ayarlar" class="ekran" hidden>
       <form id="ayarlar-formu" class="form kart">
         <label>Metrekare birim fiyatı (₺)
@@ -134,6 +203,13 @@
     </section>
 
   </main>
+
+  <!-- Alttaki sabit menü çubuğu (formlarda gizlenir) -->
+  <nav id="alt-menu" class="alt-menu" hidden>
+    <button data-sekme="ana" data-adres="/">Ana Ekran</button>
+    <button data-sekme="musteriler" data-adres="/musteriler">Müşteriler</button>
+    <button data-sekme="yonetici" data-adres="/yonetici">Yönetici</button>
+  </nav>
 
   <!-- Kısa bilgi mesajı ("Kaydedildi" gibi) -->
   <div id="bildirim" class="bildirim" hidden></div>

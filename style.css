@@ -35,6 +35,11 @@ main {
   padding-bottom: calc(32px + env(safe-area-inset-bottom));
 }
 
+/* Alt menü görünürken içerik menünün altında kalmasın */
+body.menulu main {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
 /* ===== Üst başlık ===== */
 .ust-bar {
   position: sticky;
@@ -75,10 +80,15 @@ main {
   background: rgba(255, 255, 255, 0.2);
 }
 
-/* Geri butonu gizliyken ayarlar butonu sağda kalsın diye yer tutucu */
+/* Geri butonu gizliyken başlık ortada kalsın diye yer tutucu */
 #geri-butonu[hidden] {
   display: block;
   visibility: hidden;
+}
+
+/* Sağ taraftaki boşluk: başlığı ortalamak için geri butonuyla aynı genişlikte */
+.ust-bosluk {
+  min-width: 72px;
 }
 
 /* ===== Butonlar ===== */
@@ -201,34 +211,266 @@ main {
   margin: 24px 0 4px;
 }
 
-/* ===== Özet kartı (ana ekran) ===== */
-.ozet-kart {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  background: var(--kart);
-  border-left: 6px solid #ef6c00;
-  border-radius: var(--kose);
-  padding: 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+/* ===== Ana ekran: durum satırları ===== */
+.durum-listesi {
+  margin-top: 0;
 }
 
-.ozet-sayi {
-  font-size: 40px;
-  font-weight: 700;
-  color: #ef6c00;
+.durum-satiri {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 14px 10px 16px;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.durum-adi {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.durum-adi small {
+  color: var(--soluk-yazi);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.durum-sayi {
   min-width: 48px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #eef1f5;
+  font-size: 20px;
+  font-weight: 700;
   text-align: center;
 }
 
-.ozet-yazi {
-  font-size: 18px;
+.durum-ok {
+  color: var(--soluk-yazi);
+  font-size: 26px;
+  line-height: 1;
 }
 
-.ozet-yazi small {
+/* ===== Ana ekran: hızlı erişim butonları ===== */
+.hizli-erisim {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.hizli-buton {
+  min-height: 64px;
+  margin: 0;
+  padding: 8px 6px;
+  font-size: 16px;
+}
+
+/* ===== Sipariş satırı (durum listesi, gün özeti) ===== */
+.siparis-satiri {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+}
+
+.satir-icerik {
+  flex: 1;
+  min-width: 0;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.satir-ust {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.siparis-no {
+  color: var(--ana-renk);
+  font-weight: 700;
+}
+
+.ileri-butonu {
+  width: auto;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  font-size: 15px;
+}
+
+/* Küçük "Ödendi / Ödenmedi" etiketi */
+.etiket {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.etiket.odendi {
+  background: #e8f5e9;
+  color: var(--basari);
+}
+
+.etiket.odenmedi {
+  background: #ffebee;
+  color: var(--tehlike);
+}
+
+/* ===== Özet kutuları (Gün Özeti, Yönetici) ===== */
+.ozet-izgara {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ozet-kutu {
+  background: var(--kart);
+  border-radius: var(--kose);
+  padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.ozet-kutu.genis {
+  grid-column: span 2;
+}
+
+.ozet-baslik {
   color: var(--soluk-yazi);
   font-size: 14px;
+  font-weight: 600;
+}
+
+.ozet-deger {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.ozet-not {
+  color: var(--soluk-yazi);
+  font-size: 12px;
+}
+
+.ozet-kutu.olumlu .ozet-deger {
+  color: var(--basari);
+}
+
+.ozet-kutu.olumsuz .ozet-deger {
+  color: var(--tehlike);
+}
+
+.aralik-yazisi {
+  margin: 4px 0 12px;
+  color: var(--soluk-yazi);
+  text-align: center;
+}
+
+/* ===== Yönetici: dönem seçimi ve giderler ===== */
+.donem-secici {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.donem-secici button {
+  min-height: 48px;
+  padding: 4px;
+  border: 2px solid var(--ana-renk);
+  border-radius: var(--kose);
+  background: #fff;
+  color: var(--ana-renk);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.donem-secici button.secili {
+  background: var(--ana-renk);
+  color: #fff;
+}
+
+.gider-satiri {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 16px;
+}
+
+.gider-bilgi {
+  flex: 1;
+  min-width: 0;
+}
+
+.gider-aciklama {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.gider-tutar {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.gider-satiri .buton {
+  width: auto;
+}
+
+/* ===== Sipariş Bul ===== */
+.bul-sonuc {
+  color: var(--tehlike);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ===== Alt menü çubuğu ===== */
+.alt-menu {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: #fff;
+  border-top: 1px solid var(--cizgi);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+  /* iPhone'un alt çubuğu için boşluk */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* "hidden" özelliği display:grid'i ezsin diye */
+.alt-menu[hidden] {
+  display: none;
+}
+
+.alt-menu button {
+  min-height: 60px;
+  border: none;
+  border-top: 3px solid transparent;
+  background: none;
+  color: var(--soluk-yazi);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.alt-menu button.secili {
+  border-top-color: var(--ana-renk);
+  color: var(--ana-renk);
 }
 
 /* ===== Yedek hatırlatıcısı (ana ekran) ===== */
@@ -334,11 +576,24 @@ main {
   color: var(--tehlike);
 }
 
-/* Durum renkleri (sipariş kartının sol kenarı) */
+/* Durum renkleri (satırların ve sipariş kartlarının sol kenarı) */
 .durum-teslim-alindi  { border-left: 6px solid #6d7a88; }
-.durum-yikaniyor      { border-left: 6px solid #1e88e5; }
+.durum-bekliyor       { border-left: 6px solid #8d6e63; }
+.durum-yikamada       { border-left: 6px solid #1e88e5; }
 .durum-hazir          { border-left: 6px solid #ef6c00; }
-.durum-teslim-edildi  { border-left: 6px solid var(--basari); opacity: 0.85; }
+.durum-teslim-edildi  { border-left: 6px solid var(--basari); }
+
+/* Müşteri detayında teslim edilmiş siparişler biraz soluk */
+.siparis.durum-teslim-edildi {
+  opacity: 0.85;
+}
+
+/* Durum listesinden / Sipariş Bul'dan gelinen sipariş çerçeveli görünür */
+.siparis.vurgulu {
+  outline: 3px solid var(--ana-renk);
+  outline-offset: 2px;
+  opacity: 1;
+}
 
 /* ===== Formlar ===== */
 .form label {
@@ -446,4 +701,9 @@ select:focus,
   font-size: 16px;
   z-index: 20;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* Alt menü varken bildirim menünün üstünde çıksın */
+body.menulu .bildirim {
+  bottom: calc(80px + env(safe-area-inset-bottom));
 }
