@@ -111,6 +111,13 @@ body.menulu main {
   transform: scale(0.98);
 }
 
+/* İşlem sürerken pasif yapılan buton ve listeler (çift basma koruması) */
+.buton:disabled,
+select:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .buton-ana {
   background: var(--ana-renk);
   color: #fff;
@@ -701,6 +708,19 @@ select:focus,
   font-size: 16px;
   z-index: 20;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* Hata bildirimi: kırmızı ve dikkat çekici ("Kaydedilemedi, tekrar deneyin") */
+.bildirim.hata {
+  width: calc(100% - 32px);
+  max-width: 600px;
+  padding: 16px 20px;
+  background: var(--tehlike);
+  font-size: 17px;
+  font-weight: 700;
+  border-radius: var(--kose);
+  text-align: center;
+  cursor: pointer;
 }
 
 /* Alt menü varken bildirim menünün üstünde çıksın */

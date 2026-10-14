@@ -6,7 +6,7 @@
    Telefonlar ancak bu dosya değişince yeni sürümü indirir.
    ===================================================================== */
 
-const SURUM = '1.4.0';
+const SURUM = '1.7.0';
 const CACHE_NAME = 'hali-yikama-' + SURUM;
 
 // Önbelleğe alınacak (internetsiz çalışacak) dosyalar
@@ -14,6 +14,7 @@ const DOSYALAR = [
   './',
   './index.html',
   './style.css',
+  './veri.js',
   './app.js',
   './manifest.json',
   './icons/icon-192.png',

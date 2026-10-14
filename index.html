@@ -212,8 +212,10 @@
   </nav>
 
   <!-- Kısa bilgi mesajı ("Kaydedildi" gibi) -->
-  <div id="bildirim" class="bildirim" hidden></div>
+  <div id="bildirim" class="bildirim" role="status" aria-live="assertive" hidden></div>
 
+  <!-- Önce veri katmanı, sonra ekranlar -->
+  <script src="veri.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

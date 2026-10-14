@@ -1,42 +1,38 @@
 /* =====================================================================
-   HALI YIKAMA UYGULAMASI - app.js
-   Tüm uygulama mantığı bu dosyadadır. Bölümler:
+   HALI YIKAMA UYGULAMASI - app.js  (EKRANLAR)
+   Ekranlar ve kullanıcı etkileşimleri bu dosyadadır.
+   Veriye SADECE veri.js'deki fonksiyonlarla ulaşılır
+   (musterileriGetir, siparisEkle, siparisGuncelle, giderSil ...).
+   Bu dosya localStorage'a hiç dokunmaz.
+
+   veri.js fonksiyonları BEKLEME YAPAR (async): sonuçları "await" ile alınır.
+   Bu yüzden veri kullanan fonksiyonlar da "async" olarak yazılmıştır.
+   Ekranlar önce veriyi alır, sonra çizilir.
+
+   Bölümler:
      1. Sabitler
-     2. Veri (localStorage okuma / yazma)
-     3. Eski verileri yeni yapıya uyarlama
-     4. Yardımcı fonksiyonlar (para, tarih, sayı biçimleri)
-     5. Sipariş işlemleri (durum, ödeme, özet hesaplama)
-     6. Ekranlar arası geçiş ve alt menü
-     7. Ana Ekran (durum satırları, hızlı erişim, yedek hatırlatıcısı)
-     8. Durum listesi (örn. "Yıkamada" olan siparişler)
-     9. Gün Özeti
-    10. Gider formu
-    11. Sipariş Bul
-    12. Müşteriler (liste ve arama)
-    13. Müşteri detayı ve siparişleri
-    14. Müşteri formu
-    15. Sipariş formu
-    16. Yönetici (ciro, tahsilat, gider)
-    17. Ayarlar ve yedekleme
-    18. Service worker (internetsiz çalışma ve güncelleme)
+     2. Yardımcı fonksiyonlar (para, tarih, sayı biçimleri, çift basma koruması)
+     3. Sipariş işlemleri (durum, ödeme, özet hesaplama)
+     4. Ekranlar arası geçiş ve alt menü
+     5. Ana Ekran (durum satırları, hızlı erişim, yedek hatırlatıcısı)
+     6. Durum listesi (örn. "Yıkamada" olan siparişler)
+     7. Gün Özeti
+     8. Gider formu
+     9. Sipariş Bul
+    10. Müşteriler (liste ve arama)
+    11. Müşteri detayı ve siparişleri
+    12. Müşteri formu
+    13. Sipariş formu
+    14. Yönetici (ciro, tahsilat, gider)
+    15. Ayarlar ve yedekleme
+    16. Service worker (internetsiz çalışma ve güncelleme)
    ===================================================================== */
 
 
-/* ===================== 1. SABİTLER ===================== */
+/* ===================== 1. SABİTLER =====================
+   (Sipariş durumları DURUMLAR ve TESLIM_EDILDI veri.js'dedir.) */
 
-// localStorage içinde verilerin saklandığı anahtar isimleri
-const ANAHTAR_MUSTERILER = 'musteriler';
-const ANAHTAR_SIPARISLER = 'siparisler';
-const ANAHTAR_GIDERLER = 'giderler';
-const ANAHTAR_AYARLAR = 'ayarlar';
-const ANAHTAR_SON_YEDEK = 'sonYedek'; // Son yedeğin alındığı an (ayrı tutulur, geri yüklemede silinmez)
-
-const VARSAYILAN_BIRIM_FIYAT = 100; // TL / m²
-const YEDEK_UYARI_GUN = 7;          // Bu kadar günden eski yedek kırmızı uyarı verir
-
-// Sipariş durumları (iş akışı sırasıyla)
-const DURUMLAR = ['Teslim Alındı', 'Bekliyor', 'Yıkamada', 'Hazır', 'Teslim Edildi'];
-const TESLIM_EDILDI = 'Teslim Edildi';
+const YEDEK_UYARI_GUN = 7; // Bu kadar günden eski yedek kırmızı uyarı verir
 
 // Durum listesindeki butonun yazısı: siparişi bir sonraki duruma geçirir
 const SONRAKI_ADIM = {
@@ -46,118 +42,25 @@ const SONRAKI_ADIM = {
   'Hazır': 'Teslim Et'
 };
 
-// Eski sürümlerdeki durum adlarının yeni karşılıkları
-const ESKI_DURUMLAR = {
-  'Teslim alındı': 'Teslim Alındı',
-  'Yıkanıyor': 'Yıkamada',
-  'Teslim edildi': 'Teslim Edildi'
-};
 
+/* ===================== 2. YARDIMCI FONKSİYONLAR ===================== */
 
-/* ===================== 2. VERİ ===================== */
+// Müşteri listesinden, kimliğe göre hızlı bulma tablosu yapar: musteriler.get(id)
+function musteriHaritasi(musteriler) {
+  return new Map(musteriler.map(m => [m.id, m]));
+}
 
-// localStorage'dan bir listeyi/nesneyi okur. Yoksa varsayılanı döndürür.
-function oku(anahtar, varsayilan) {
+// Çift basma koruması: işlem bitene kadar butonu pasif yapar.
+// Bulutta kayıt birkaç saniye sürebilir; bu sırada iki kez basılırsa iki kayıt oluşmasın.
+async function islemSirasinda(buton, islem) {
+  if (buton.disabled) return; // Zaten bir işlem sürüyor
+  buton.disabled = true;
   try {
-    const metin = localStorage.getItem(anahtar);
-    return metin ? JSON.parse(metin) : varsayilan;
-  } catch (hata) {
-    return varsayilan;
+    return await islem();
+  } finally {
+    buton.disabled = false;
   }
 }
-
-// localStorage'a yazar. Hata olursa (örn. depolama dolu) kullanıcıya söyler.
-function yaz(anahtar, deger) {
-  try {
-    localStorage.setItem(anahtar, JSON.stringify(deger));
-    return true;
-  } catch (hata) {
-    alert('Kayıt yapılamadı! Cihazda yer kalmamış olabilir.');
-    return false;
-  }
-}
-
-function musterileriGetir() { return oku(ANAHTAR_MUSTERILER, []); }
-function siparisleriGetir() { return oku(ANAHTAR_SIPARISLER, []); }
-function giderleriGetir() { return oku(ANAHTAR_GIDERLER, []); }
-function ayarlariGetir() { return oku(ANAHTAR_AYARLAR, { birimFiyat: VARSAYILAN_BIRIM_FIYAT, sonSiparisNo: 0 }); }
-
-function musterileriKaydet(liste) { return yaz(ANAHTAR_MUSTERILER, liste); }
-function siparisleriKaydet(liste) { return yaz(ANAHTAR_SIPARISLER, liste); }
-function giderleriKaydet(liste) { return yaz(ANAHTAR_GIDERLER, liste); }
-function ayarlariKaydet(ayarlar) { return yaz(ANAHTAR_AYARLAR, ayarlar); }
-
-function musteriBul(id) {
-  return musterileriGetir().find(m => m.id === id);
-}
-
-// Müşterileri kimliklerine göre hızlı bulmak için: musteriler.get(id)
-function musteriHaritasi() {
-  return new Map(musterileriGetir().map(m => [m.id, m]));
-}
-
-function musterininSiparisleri(musteriId) {
-  return siparisleriGetir().filter(s => s.musteriId === musteriId);
-}
-
-// Her kayıt için benzersiz bir kimlik (id) üretir
-function yeniId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
-// Yeni sipariş için sıradaki numarayı verir (1, 2, 3 ...).
-// Silinen siparişlerin numarası tekrar kullanılmaz.
-function yeniSiparisNo() {
-  const ayarlar = ayarlariGetir();
-  ayarlar.sonSiparisNo = (Number(ayarlar.sonSiparisNo) || 0) + 1;
-  ayarlariKaydet(ayarlar);
-  return ayarlar.sonSiparisNo;
-}
-
-
-/* ===================== 3. ESKİ VERİLERİ YENİ YAPIYA UYARLAMA =====================
-   Uygulama her açıldığında ve yedek geri yüklendiğinde çalışır.
-   Eski sürümlerden kalan siparişleri yeni yapıya getirir; zaten
-   uygun olan veriye dokunmaz.
-   ================================================================================ */
-
-function veriyiDuzenle() {
-  const siparisler = siparisleriGetir();
-  const ayarlar = ayarlariGetir();
-  const oncekiHali = JSON.stringify(siparisler) + JSON.stringify(ayarlar);
-
-  siparisler.forEach(s => {
-    // Durum adları: "Yıkanıyor" -> "Yıkamada" gibi
-    if (!DURUMLAR.includes(s.durum)) s.durum = ESKI_DURUMLAR[s.durum] || DURUMLAR[0];
-
-    // Ödemesi alınmış ama ödeme tarihi olmayan eski siparişlerde sipariş tarihi kullanılır
-    s.odemeAlindi = !!s.odemeAlindi;
-    if (s.odemeAlindi && !s.odemeTarihi) s.odemeTarihi = s.tarih;
-    if (!s.odemeAlindi) s.odemeTarihi = null;
-
-    // Teslim edilmiş ama teslim tarihi olmayan eski siparişlerde de sipariş tarihi kullanılır
-    if (s.durum === TESLIM_EDILDI && !s.teslimTarihi) s.teslimTarihi = s.tarih;
-    if (s.durum !== TESLIM_EDILDI) s.teslimTarihi = null;
-  });
-
-  // Numarası olmayan siparişlere, oluşturulma sırasına göre numara ver
-  let sonNo = Math.max(Number(ayarlar.sonSiparisNo) || 0, ...siparisler.map(s => Number(s.no) || 0));
-  siparisler
-    .filter(s => !s.no)
-    .sort((a, b) => (a.olusturma || 0) - (b.olusturma || 0))
-    .forEach(s => { sonNo += 1; s.no = sonNo; });
-  ayarlar.sonSiparisNo = sonNo;
-  if (!(Number(ayarlar.birimFiyat) > 0)) ayarlar.birimFiyat = VARSAYILAN_BIRIM_FIYAT;
-
-  // Sadece bir şey değiştiyse kaydet
-  if (JSON.stringify(siparisler) + JSON.stringify(ayarlar) !== oncekiHali) {
-    siparisleriKaydet(siparisler);
-    ayarlariKaydet(ayarlar);
-  }
-}
-
-
-/* ===================== 4. YARDIMCI FONKSİYONLAR ===================== */
 
 const paraBicimi = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' });
 const sayiBicimi = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 });
@@ -241,18 +144,50 @@ function teslimEdilmediMi(siparis) {
   return siparis.durum !== TESLIM_EDILDI;
 }
 
-// Ekranın altında kısa bir mesaj gösterir
+// Ekranın altında kısa bir mesaj gösterir.
+// tur = 'hata' ise kırmızı olur ve daha uzun kalır. Mesaja dokununca kapanır.
 let bildirimZamanlayici;
-function bildirimGoster(mesaj) {
+function bildirimGoster(mesaj, tur) {
   const kutu = document.getElementById('bildirim');
   kutu.textContent = mesaj;
+  kutu.classList.toggle('hata', tur === 'hata');
   kutu.hidden = false;
   clearTimeout(bildirimZamanlayici);
-  bildirimZamanlayici = setTimeout(() => { kutu.hidden = true; }, 2200);
+  bildirimZamanlayici = setTimeout(() => { kutu.hidden = true; }, tur === 'hata' ? 6000 : 2200);
 }
 
+function hataGoster(mesaj) {
+  bildirimGoster(mesaj, 'hata');
+}
 
-/* ===================== 5. SİPARİŞ İŞLEMLERİ ===================== */
+document.getElementById('bildirim').addEventListener('click', olay => { olay.currentTarget.hidden = true; });
+
+// --- Kayıt / güncelleme / silme hatalarını kullanıcıya gösterme ---
+const KAYIT_HATASI = 'Kaydedilemedi, tekrar deneyin.';
+const SILME_HATASI = 'Silinemedi, tekrar deneyin.';
+
+// Bir veri.js işlemini çalıştırır. İşlem yapılamazsa (null/false döndürürse
+// ya da hata olursa) ekranda kırmızı uyarı gösterir ve null döndürür.
+// Çağıran yer null görünce durur: ekrandan ayrılmaz, formdaki bilgiler silinmez.
+async function veriIslemi(islem, hataMesaji = KAYIT_HATASI) {
+  try {
+    const sonuc = await islem();
+    if (sonuc) return sonuc;
+  } catch (hata) {
+    console.error('Veri işlemi yapılamadı:', hata);
+  }
+  hataGoster(hataMesaji);
+  return null;
+}
+
+// Gözden kaçan her türlü hata için son çare: kullanıcı en azından bir şeyler ters gittiğini görsün
+window.addEventListener('unhandledrejection', olay => {
+  console.error('Beklenmeyen hata:', olay.reason);
+  hataGoster('Bir hata oluştu, tekrar deneyin.');
+});
+
+
+/* ===================== 3. SİPARİŞ İŞLEMLERİ ===================== */
 
 // Siparişin durumunu değiştirir. "Teslim Edildi"ye geçtiği gün kaydedilir;
 // geri alınırsa teslim tarihi silinir.
@@ -278,15 +213,13 @@ function sonrakiDurum(durum) {
   return sira >= 0 && sira < DURUMLAR.length - 1 ? DURUMLAR[sira + 1] : null;
 }
 
-// Tek bir siparişi değiştirip kaydeder, sonra bulunulan ekranı yeniden çizer.
-// Değişen siparişi döndürür (bulunamazsa null).
-function siparisiGuncelle(siparisId, degisiklik) {
-  const siparisler = siparisleriGetir();
-  const siparis = siparisler.find(s => s.id === siparisId);
-  if (!siparis) return null;
-  degisiklik(siparis);
-  if (!siparisleriKaydet(siparisler)) return null;
-  sayfayiCiz();
+// Tek bir siparişi değiştirir (veri.js ile), sonra bulunulan ekranı yeniden çizer.
+// Değişen siparişi döndürür; yapılamazsa uyarı gösterir ve null döndürür.
+// Başarısız olsa da ekran yeniden çizilir; böylece ekran kayıttaki GERÇEK durumu
+// gösterir (örn. açılır liste değiştirilemeyen eski değerine geri döner).
+async function siparisiGuncelleVeCiz(siparisId, degisiklik) {
+  const siparis = await veriIslemi(() => siparisGuncelle(siparisId, degisiklik));
+  await sayfayiCiz();
   return siparis;
 }
 
@@ -299,20 +232,19 @@ function durumdakiSiparisler(siparisler, durumNo) {
 }
 
 // İki tarih arasındaki ("2026-10-01" ile "2026-10-31" gibi) rakamları hesaplar.
-// bas/bit null ise o taraf sınırsızdır (Tümü).
+// bas/bit null ise o taraf sınırsızdır (Tümü). Silinmiş kayıtlar zaten listede yoktur.
 //   Ciro      : sipariş tarihi bu aralıkta olan siparişlerin toplamı
 //   Tahsilat  : ödeme tarihi bu aralıkta olan siparişlerin toplamı (kasaya giren para)
 //   Net (iş)  : ciro − gider (yapılan işin kârı)
 //   Kasa      : tahsilat − gider (eldeki paranın değişimi)
-function ozetHesapla(bas, bit) {
+function ozetHesapla(siparisler, giderler, bas, bit) {
   const aralikta = tarih => !!tarih && (!bas || tarih >= bas) && (!bit || tarih <= bit);
   const toplam = liste => yuvarla(liste.reduce((t, x) => t + (Number(x.tutar) || 0), 0));
 
-  const siparisler = siparisleriGetir();
   const donemSiparisleri = siparisler.filter(s => aralikta(s.tarih));
   const ciro = toplam(donemSiparisleri);
   const tahsilat = toplam(siparisler.filter(s => s.odemeAlindi && aralikta(s.odemeTarihi)));
-  const gider = toplam(giderleriGetir().filter(g => aralikta(g.tarih)));
+  const gider = toplam(giderler.filter(g => aralikta(g.tarih)));
 
   return {
     siparisSayisi: donemSiparisleri.length,
@@ -368,19 +300,21 @@ function siparisSatiriHTML(s, musteriler, ileriButonuVar) {
 }
 
 // Sipariş satırlarındaki tıklamalar (durum listesi ve gün özeti için ortak)
-function siparisSatirinaTiklandi(olay) {
+async function siparisSatirinaTiklandi(olay) {
   const buton = olay.target.closest('button[data-islem]');
   if (!buton) return;
 
   if (buton.dataset.islem === 'ac') {
     // Müşteri detayını aç ve bu siparişi vurgula
-    if (musteriBul(buton.dataset.musteri)) git(`/musteri/${buton.dataset.musteri}/${buton.dataset.id}`);
+    if (await musteriGetir(buton.dataset.musteri)) git(`/musteri/${buton.dataset.musteri}/${buton.dataset.id}`);
   } else if (buton.dataset.islem === 'ileri') {
-    const siparis = siparisiGuncelle(buton.dataset.id, s => {
-      const yeni = sonrakiDurum(s.durum);
-      if (yeni) durumAyarla(s, yeni);
+    await islemSirasinda(buton, async () => {
+      const siparis = await siparisiGuncelleVeCiz(buton.dataset.id, s => {
+        const yeni = sonrakiDurum(s.durum);
+        if (yeni) durumAyarla(s, yeni);
+      });
+      if (siparis) bildirimGoster(`#${siparis.no} → ${siparis.durum}`);
     });
-    if (siparis) bildirimGoster(`#${siparis.no} → ${siparis.durum}`);
   }
 }
 
@@ -388,7 +322,7 @@ document.querySelectorAll('.siparis-satirlari').forEach(liste =>
   liste.addEventListener('click', siparisSatirinaTiklandi));
 
 
-/* ===================== 6. EKRANLAR ARASI GEÇİŞ VE ALT MENÜ =====================
+/* ===================== 4. EKRANLAR ARASI GEÇİŞ VE ALT MENÜ =====================
    Hangi ekranın görüneceğini adresin # kısmı belirler:
      #/                          -> Ana Ekran
      #/durum/2                   -> 3. durumdaki ("Yıkamada") siparişler
@@ -407,6 +341,14 @@ document.querySelectorAll('.siparis-satirlari').forEach(liste =>
 
 let uygulamaIcindeGezildi = false; // Geri tuşu için: uygulama içinde sayfa değişti mi?
 let sonCizilenAdres = null;        // Aynı ekran yeniden çizilince sayfa başa kaymasın diye
+
+// --- Hızlı geçiş koruması ---
+// Her ekran çizimi bir sıra numarası alır. Veri beklenirken başka bir ekran
+// çizilmeye başlarsa, eski çizim bunu numarasından anlar ve ekrana dokunmaz.
+// (Bulutta veri geç gelebilir; geç gelen veri yeni ekranın üstüne yazılmasın.)
+let sonCizimNo = 0;
+function cizimBaslat() { return ++sonCizimNo; }
+function cizimEskidi(no) { return no !== sonCizimNo; }
 
 function git(adres) {
   uygulamaIcindeGezildi = true;
@@ -452,32 +394,42 @@ function ekranGoster(ekranId, baslik, geriAdresi, sekme) {
   return yeniEkran;
 }
 
-function sayfayiCiz() {
+async function sayfayiCiz() {
+  try {
+    await adreseGoreCiz();
+  } catch (hata) {
+    // Veri okunamadıysa (örn. bulutta internet yoksa) kullanıcı boş ekranla kalmasın
+    console.error('Ekran çizilemedi:', hata);
+    hataGoster('Veriler yüklenemedi, tekrar deneyin.');
+  }
+}
+
+async function adreseGoreCiz() {
   const parcalar = location.hash.replace(/^#\/?/, '').split('/');
   const sayfa = parcalar[0];
 
   if (sayfa === 'durum') {
-    durumListesiniCiz(Number(parcalar[1]));
+    await durumListesiniCiz(Number(parcalar[1]));
   } else if (sayfa === 'gun-ozeti') {
-    gunOzetiniCiz();
+    await gunOzetiniCiz();
   } else if (sayfa === 'gider-formu') {
     giderFormunuCiz();
   } else if (sayfa === 'siparis-bul') {
     siparisBulCiz();
   } else if (sayfa === 'musteriler') {
-    musteriListesiniCiz();
+    await musteriListesiniCiz();
   } else if (sayfa === 'musteri' && parcalar[1]) {
-    musteriDetayiniCiz(parcalar[1], parcalar[2]);
+    await musteriDetayiniCiz(parcalar[1], parcalar[2]);
   } else if (sayfa === 'musteri-formu') {
-    musteriFormunuCiz(parcalar[1]);
+    await musteriFormunuCiz(parcalar[1]);
   } else if (sayfa === 'siparis-formu' && parcalar[1]) {
-    siparisFormunuCiz(parcalar[1], parcalar[2]);
+    await siparisFormunuCiz(parcalar[1], parcalar[2]);
   } else if (sayfa === 'yonetici') {
-    yoneticiCiz();
+    await yoneticiCiz();
   } else if (sayfa === 'ayarlar') {
-    ayarlariCiz();
+    await ayarlariCiz();
   } else {
-    anaEkraniCiz();
+    await anaEkraniCiz();
   }
 }
 
@@ -496,12 +448,15 @@ document.getElementById('alt-menu').addEventListener('click', olay => {
 });
 
 
-/* ===================== 7. ANA EKRAN ===================== */
+/* ===================== 5. ANA EKRAN ===================== */
 
-function anaEkraniCiz() {
+async function anaEkraniCiz() {
+  const cizim = cizimBaslat();
+  const [siparisler, sonYedek] = await Promise.all([siparisleriGetir(), sonYedekZamani()]);
+  if (cizimEskidi(cizim)) return;
+
   ekranGoster('ekran-ana', 'Halı Yıkama', null, 'ana');
 
-  const siparisler = siparisleriGetir();
   document.getElementById('durum-satirlari').innerHTML = DURUMLAR.map((durum, sira) => {
     const sayi = durumdakiSiparisler(siparisler, sira).length;
     const not = durum === TESLIM_EDILDI ? ' <small>(bugün)</small>' : '';
@@ -515,7 +470,7 @@ function anaEkraniCiz() {
       </li>`;
   }).join('');
 
-  yedekHatirlaticisiniCiz();
+  yedekHatirlaticisiniCiz(sonYedek);
 }
 
 document.getElementById('durum-satirlari').addEventListener('click', olay => {
@@ -528,8 +483,7 @@ document.querySelectorAll('.hizli-buton').forEach(buton =>
   buton.addEventListener('click', () => git(buton.dataset.adres)));
 
 // Son yedekten bu yana kaç takvim günü geçtiğini döndürür. Hiç yedek yoksa null.
-function sonYedektenBeriGun() {
-  const sonYedek = oku(ANAHTAR_SON_YEDEK, null);
+function sonYedektenBeriGun(sonYedek) {
   if (!sonYedek) return null;
   const yedekGunu = new Date(sonYedek);
   yedekGunu.setHours(0, 0, 0, 0);
@@ -538,8 +492,8 @@ function sonYedektenBeriGun() {
   return Math.round((bugunBasi - yedekGunu) / 86400000);
 }
 
-function yedekHatirlaticisiniCiz() {
-  const gun = sonYedektenBeriGun();
+function yedekHatirlaticisiniCiz(sonYedek) {
+  const gun = sonYedektenBeriGun(sonYedek);
   let yazi;
   if (gun === null) yazi = 'Hiç yedek alınmadı!';
   else if (gun <= 0) yazi = 'Son yedek: bugün';
@@ -550,23 +504,28 @@ function yedekHatirlaticisiniCiz() {
   document.getElementById('yedek-kart').classList.toggle('uyari', uyariVar);
 }
 
-document.getElementById('simdi-yedekle-butonu').addEventListener('click', () => {
-  yedekIndir();
-  yedekHatirlaticisiniCiz();
-});
+document.getElementById('simdi-yedekle-butonu').addEventListener('click', olay =>
+  islemSirasinda(olay.currentTarget, async () => {
+    await yedekIndir();
+    yedekHatirlaticisiniCiz(await sonYedekZamani());
+  }));
 
 
-/* ===================== 8. DURUM LİSTESİ ===================== */
+/* ===================== 6. DURUM LİSTESİ ===================== */
 
-function durumListesiniCiz(durumNo) {
+async function durumListesiniCiz(durumNo) {
   if (!(durumNo >= 0 && durumNo < DURUMLAR.length)) { yerineGit('/'); return; }
+  const cizim = cizimBaslat();
+  const [tumSiparisler, tumMusteriler] = await Promise.all([siparisleriGetir(), musterileriGetir()]);
+  if (cizimEskidi(cizim)) return;
+
   const durum = DURUMLAR[durumNo];
   ekranGoster('ekran-durum', durum === TESLIM_EDILDI ? 'Bugün Teslim Edilenler' : durum, '/', 'ana');
 
   // En eski sipariş en üstte (önce gelen önce işlenir)
-  const siparisler = durumdakiSiparisler(siparisleriGetir(), durumNo)
+  const siparisler = durumdakiSiparisler(tumSiparisler, durumNo)
     .sort((a, b) => a.tarih.localeCompare(b.tarih) || a.no - b.no);
-  const musteriler = musteriHaritasi();
+  const musteriler = musteriHaritasi(tumMusteriler);
 
   document.getElementById('durum-siparisleri').innerHTML =
     siparisler.map(s => siparisSatiriHTML(s, musteriler, true)).join('');
@@ -579,31 +538,37 @@ function durumListesiniCiz(durumNo) {
 }
 
 
-/* ===================== 9. GÜN ÖZETİ ===================== */
+/* ===================== 7. GÜN ÖZETİ ===================== */
 
-function gunOzetiniCiz() {
+async function gunOzetiniCiz() {
+  const cizim = cizimBaslat();
+  const [tumSiparisler, giderler, tumMusteriler] =
+    await Promise.all([siparisleriGetir(), giderleriGetir(), musterileriGetir()]);
+  if (cizimEskidi(cizim)) return;
+
   ekranGoster('ekran-gun-ozeti', 'Gün Özeti', '/', 'ana');
 
   const bugunTarihi = bugun();
   document.getElementById('gun-tarihi').textContent = tarihYaz(bugunTarihi);
   document.getElementById('gun-ozeti-kartlari').innerHTML =
-    ozetKutulariHTML(ozetHesapla(bugunTarihi, bugunTarihi));
+    ozetKutulariHTML(ozetHesapla(tumSiparisler, giderler, bugunTarihi, bugunTarihi));
 
-  const siparisler = siparisleriGetir()
+  const siparisler = tumSiparisler
     .filter(s => s.tarih === bugunTarihi)
     .sort((a, b) => a.no - b.no);
-  const musteriler = musteriHaritasi();
+  const musteriler = musteriHaritasi(tumMusteriler);
   document.getElementById('gun-siparisleri').innerHTML =
     siparisler.map(s => siparisSatiriHTML(s, musteriler, false)).join('');
   document.getElementById('gun-bos').hidden = siparisler.length > 0;
 }
 
 
-/* ===================== 10. GİDER FORMU ===================== */
+/* ===================== 8. GİDER FORMU ===================== */
 
 const giderFormu = document.getElementById('gider-formu');
 
 function giderFormunuCiz() {
+  cizimBaslat(); // Bekleyen eski çizimler bu formun üstüne yazmasın
   ekranGoster('ekran-gider-formu', 'Gider Ekle', '/', null);
   giderFormu.tarih.value = bugun();
   giderFormu.tutar.value = '';
@@ -612,37 +577,36 @@ function giderFormunuCiz() {
 
 giderFormu.addEventListener('submit', olay => {
   olay.preventDefault();
+  islemSirasinda(giderFormu.querySelector('[type="submit"]'), async () => {
+    const tutar = sayiOku(giderFormu.tutar.value);
+    if (tutar === null || tutar <= 0) {
+      alert('Lütfen geçerli bir tutar girin (örn: 450 veya 99,90).');
+      return;
+    }
+    if (!giderFormu.tarih.value) {
+      alert('Lütfen tarih seçin.');
+      return;
+    }
 
-  const tutar = sayiOku(giderFormu.tutar.value);
-  if (tutar === null || tutar <= 0) {
-    alert('Lütfen geçerli bir tutar girin (örn: 450 veya 99,90).');
-    return;
-  }
-  if (!giderFormu.tarih.value) {
-    alert('Lütfen tarih seçin.');
-    return;
-  }
+    const gider = await veriIslemi(() => giderEkle({
+      tarih: giderFormu.tarih.value,
+      tutar: yuvarla(tutar),
+      aciklama: giderFormu.aciklama.value.trim() || 'Gider'
+    }));
+    if (!gider) return; // Uyarı gösterildi; form olduğu gibi kalır
 
-  const giderler = giderleriGetir();
-  giderler.push({
-    id: yeniId(),
-    tarih: giderFormu.tarih.value,
-    tutar: yuvarla(tutar),
-    aciklama: giderFormu.aciklama.value.trim() || 'Gider',
-    olusturma: Date.now()
+    bildirimGoster('Gider eklendi: ' + paraYaz(tutar));
+    geriGit('/');
   });
-  if (!giderleriKaydet(giderler)) return;
-
-  bildirimGoster('Gider eklendi: ' + paraYaz(tutar));
-  geriGit('/');
 });
 
 
-/* ===================== 11. SİPARİŞ BUL ===================== */
+/* ===================== 9. SİPARİŞ BUL ===================== */
 
 const siparisBulFormu = document.getElementById('siparis-bul-formu');
 
 function siparisBulCiz() {
+  cizimBaslat();
   ekranGoster('ekran-siparis-bul', 'Sipariş Bul', '/', 'ana');
   siparisBulFormu.no.value = '';
   document.getElementById('bul-sonuc').hidden = true;
@@ -650,32 +614,38 @@ function siparisBulCiz() {
 
 siparisBulFormu.addEventListener('submit', olay => {
   olay.preventDefault();
-  const sonuc = document.getElementById('bul-sonuc');
-  const no = Number(sadeceRakam(siparisBulFormu.no.value)); // "#27" de yazılabilir
+  islemSirasinda(siparisBulFormu.querySelector('[type="submit"]'), async () => {
+    const sonuc = document.getElementById('bul-sonuc');
+    const no = Number(sadeceRakam(siparisBulFormu.no.value)); // "#27" de yazılabilir
 
-  const siparis = no ? siparisleriGetir().find(s => s.no === no) : null;
-  if (siparis && musteriBul(siparis.musteriId)) {
-    git(`/musteri/${siparis.musteriId}/${siparis.id}`);
-  } else {
-    sonuc.textContent = no ? `#${no} numaralı sipariş bulunamadı.` : 'Lütfen sipariş numarasını yazın.';
-    sonuc.hidden = false;
-  }
+    const siparis = no ? await siparisNoIleBul(no) : null;
+    if (siparis && await musteriGetir(siparis.musteriId)) {
+      git(`/musteri/${siparis.musteriId}/${siparis.id}`);
+    } else {
+      sonuc.textContent = no ? `#${no} numaralı sipariş bulunamadı.` : 'Lütfen sipariş numarasını yazın.';
+      sonuc.hidden = false;
+    }
+  });
 });
 
 
-/* ===================== 12. MÜŞTERİLER ===================== */
+/* ===================== 10. MÜŞTERİLER ===================== */
 
-function musteriListesiniCiz() {
+async function musteriListesiniCiz() {
+  const cizim = cizimBaslat();
+  const [tumMusteriler, siparisler] = await Promise.all([musterileriGetir(), siparisleriGetir()]);
+  if (cizimEskidi(cizim)) return;
+
   ekranGoster('ekran-musteriler', 'Müşteriler', null, 'musteriler');
 
-  const acikSiparisler = siparisleriGetir().filter(teslimEdilmediMi);
+  const acikSiparisler = siparisler.filter(teslimEdilmediMi);
 
   // Arama kutusuna yazılana göre filtrele
   // (isim, adres ve telefonda arar; Türkçe karakter ve büyük/küçük harf farkı önemsizdir)
   const aranan = sadeMetin(document.getElementById('arama-kutusu').value);
   const arananRakam = sadeceRakam(aranan);
 
-  let musteriler = musterileriGetir();
+  let musteriler = tumMusteriler;
   if (aranan) {
     musteriler = musteriler.filter(m => {
       const isimUyuyor = sadeMetin(m.ad + ' ' + m.soyad).includes(aranan);
@@ -714,13 +684,15 @@ document.getElementById('musteri-listesi').addEventListener('click', olay => {
 });
 
 
-/* ===================== 13. MÜŞTERİ DETAYI ===================== */
+/* ===================== 11. MÜŞTERİ DETAYI ===================== */
 
 let aktifMusteriId = null;
 
 // vurguSiparisId verilirse o sipariş kartı çerçeveli gösterilir ve ekran ona kaydırılır
-function musteriDetayiniCiz(musteriId, vurguSiparisId) {
-  const musteri = musteriBul(musteriId);
+async function musteriDetayiniCiz(musteriId, vurguSiparisId) {
+  const cizim = cizimBaslat();
+  const [musteri, tumSiparisler] = await Promise.all([musteriGetir(musteriId), musterininSiparisleri(musteriId)]);
+  if (cizimEskidi(cizim)) return;
   if (!musteri) { yerineGit('/musteriler'); return; }
   aktifMusteriId = musteriId;
 
@@ -733,7 +705,7 @@ function musteriDetayiniCiz(musteriId, vurguSiparisId) {
   document.getElementById('detay-adres').textContent = musteri.adres || '';
 
   // Siparişler: en yeni tarih en üstte
-  const siparisler = musterininSiparisleri(musteriId).sort((a, b) =>
+  const siparisler = tumSiparisler.sort((a, b) =>
     b.tarih.localeCompare(a.tarih) || (b.olusturma || 0) - (a.olusturma || 0));
 
   document.getElementById('siparis-listesi').innerHTML = siparisler.map(s => {
@@ -770,9 +742,11 @@ function musteriDetayiniCiz(musteriId, vurguSiparisId) {
 document.getElementById('siparis-listesi').addEventListener('change', olay => {
   const secim = olay.target;
   if (secim.dataset.islem !== 'durum') return;
-  if (siparisiGuncelle(secim.dataset.id, s => durumAyarla(s, secim.value))) {
-    bildirimGoster('Durum: ' + secim.value);
-  }
+  islemSirasinda(secim, async () => {
+    if (await siparisiGuncelleVeCiz(secim.dataset.id, s => durumAyarla(s, secim.value))) {
+      bildirimGoster('Durum: ' + secim.value);
+    }
+  });
 });
 
 // Sipariş kartındaki butonlar
@@ -782,16 +756,17 @@ document.getElementById('siparis-listesi').addEventListener('click', olay => {
   const siparisId = buton.dataset.id;
 
   if (buton.dataset.islem === 'odeme') {
-    siparisiGuncelle(siparisId, s => odemeAyarla(s, !s.odemeAlindi));
+    islemSirasinda(buton, () => siparisiGuncelleVeCiz(siparisId, s => odemeAyarla(s, !s.odemeAlindi)));
   } else if (buton.dataset.islem === 'duzenle') {
     git('/siparis-formu/' + aktifMusteriId + '/' + siparisId);
   } else if (buton.dataset.islem === 'sil') {
-    if (!confirm('Bu sipariş silinsin mi? Bu işlem geri alınamaz.')) return;
-    const kalanlar = siparisleriGetir().filter(s => s.id !== siparisId);
-    if (siparisleriKaydet(kalanlar)) {
-      sayfayiCiz();
-      bildirimGoster('Sipariş silindi');
-    }
+    if (!confirm('Bu sipariş silinsin mi? Ciro ve tahsilattan da düşer.')) return;
+    islemSirasinda(buton, async () => {
+      if (await veriIslemi(() => siparisSil(siparisId), SILME_HATASI)) {
+        await sayfayiCiz();
+        bildirimGoster('Sipariş silindi');
+      }
+    });
   }
 });
 
@@ -801,29 +776,34 @@ document.getElementById('yeni-siparis-butonu').addEventListener('click', () =>
 document.getElementById('musteri-duzenle-butonu').addEventListener('click', () =>
   git('/musteri-formu/' + aktifMusteriId));
 
-document.getElementById('musteri-sil-butonu').addEventListener('click', () => {
-  const musteri = musteriBul(aktifMusteriId);
-  if (!musteri) return;
-  const siparisSayisi = musterininSiparisleri(aktifMusteriId).length;
-  let soru = `${musteri.ad} ${musteri.soyad} silinsin mi?`;
-  if (siparisSayisi > 0) soru += `\n\nBu müşterinin ${siparisSayisi} siparişi de silinecek.`;
-  soru += '\n\nBu işlem geri alınamaz.';
-  if (!confirm(soru)) return;
+document.getElementById('musteri-sil-butonu').addEventListener('click', olay =>
+  islemSirasinda(olay.currentTarget, async () => {
+    const [musteri, siparisler] =
+      await Promise.all([musteriGetir(aktifMusteriId), musterininSiparisleri(aktifMusteriId)]);
+    if (!musteri) return;
 
-  musterileriKaydet(musterileriGetir().filter(m => m.id !== aktifMusteriId));
-  siparisleriKaydet(siparisleriGetir().filter(s => s.musteriId !== aktifMusteriId));
-  bildirimGoster('Müşteri silindi');
-  geriGit('/musteriler');
-});
+    let soru = `${musteri.ad} ${musteri.soyad} silinsin mi?`;
+    if (siparisler.length > 0) {
+      soru += `\n\nBu müşterinin ${siparisler.length} siparişi var, silinirse geçmiş raporlardan da çıkar.`;
+    }
+    if (!confirm(soru)) return;
+
+    // Siparişleri de silindi olarak işaretlenir
+    if (!await veriIslemi(() => musteriSil(aktifMusteriId), SILME_HATASI)) return;
+    bildirimGoster('Müşteri silindi');
+    geriGit('/musteriler');
+  }));
 
 
-/* ===================== 14. MÜŞTERİ FORMU ===================== */
+/* ===================== 12. MÜŞTERİ FORMU ===================== */
 
 const musteriFormu = document.getElementById('musteri-formu');
 let duzenlenenMusteriId = null; // null ise yeni müşteri ekleniyor
 
-function musteriFormunuCiz(musteriId) {
-  const musteri = musteriId ? musteriBul(musteriId) : null;
+async function musteriFormunuCiz(musteriId) {
+  const cizim = cizimBaslat();
+  const musteri = musteriId ? await musteriGetir(musteriId) : null;
+  if (cizimEskidi(cizim)) return;
   if (musteriId && !musteri) { yerineGit('/musteriler'); return; }
   duzenlenenMusteriId = musteri ? musteri.id : null;
 
@@ -840,39 +820,36 @@ function musteriFormunuCiz(musteriId) {
 
 musteriFormu.addEventListener('submit', olay => {
   olay.preventDefault(); // Sayfanın yenilenmesini engelle
+  islemSirasinda(musteriFormu.querySelector('[type="submit"]'), async () => {
+    const bilgiler = {
+      ad: musteriFormu.ad.value.trim(),
+      soyad: musteriFormu.soyad.value.trim(),
+      telefon: musteriFormu.telefon.value.trim(),
+      adres: musteriFormu.adres.value.trim()
+    };
+    if (!bilgiler.ad || !bilgiler.soyad || !bilgiler.telefon) {
+      alert('Ad, soyad ve telefon zorunludur.');
+      return;
+    }
 
-  const bilgiler = {
-    ad: musteriFormu.ad.value.trim(),
-    soyad: musteriFormu.soyad.value.trim(),
-    telefon: musteriFormu.telefon.value.trim(),
-    adres: musteriFormu.adres.value.trim()
-  };
-  if (!bilgiler.ad || !bilgiler.soyad || !bilgiler.telefon) {
-    alert('Ad, soyad ve telefon zorunludur.');
-    return;
-  }
-
-  const musteriler = musterileriGetir();
-
-  if (duzenlenenMusteriId) {
-    // Var olan müşteriyi güncelle
-    const musteri = musteriler.find(m => m.id === duzenlenenMusteriId);
-    Object.assign(musteri, bilgiler);
-    if (!musterileriKaydet(musteriler)) return;
-    bildirimGoster('Müşteri güncellendi');
-    geriGit('/musteri/' + duzenlenenMusteriId);
-  } else {
-    // Yeni müşteri ekle ve detay sayfasını aç
-    const yeni = { id: yeniId(), ...bilgiler, olusturma: Date.now() };
-    musteriler.push(yeni);
-    if (!musterileriKaydet(musteriler)) return;
-    bildirimGoster('Müşteri eklendi');
-    yerineGit('/musteri/' + yeni.id);
-  }
+    // Kaydedilemezse uyarı gösterilir ve return ile durulur: form olduğu gibi kalır
+    if (duzenlenenMusteriId) {
+      // Var olan müşteriyi güncelle
+      if (!await veriIslemi(() => musteriGuncelle(duzenlenenMusteriId, bilgiler))) return;
+      bildirimGoster('Müşteri güncellendi');
+      geriGit('/musteri/' + duzenlenenMusteriId);
+    } else {
+      // Yeni müşteri ekle ve detay sayfasını aç
+      const yeni = await veriIslemi(() => musteriEkle(bilgiler));
+      if (!yeni) return;
+      bildirimGoster('Müşteri eklendi');
+      yerineGit('/musteri/' + yeni.id);
+    }
+  });
 });
 
 
-/* ===================== 15. SİPARİŞ FORMU ===================== */
+/* ===================== 13. SİPARİŞ FORMU ===================== */
 
 const siparisFormu = document.getElementById('siparis-formu');
 let formMusteriId = null;
@@ -882,10 +859,15 @@ let formBirimFiyat = 0;         // Bu siparişte kullanılacak birim fiyat
 // Durum seçeneklerini bir kez doldur
 siparisFormu.durum.innerHTML = DURUMLAR.map(d => `<option value="${d}">${d}</option>`).join('');
 
-function siparisFormunuCiz(musteriId, siparisId) {
-  const musteri = musteriBul(musteriId);
+async function siparisFormunuCiz(musteriId, siparisId) {
+  const cizim = cizimBaslat();
+  const [musteri, siparis, ayarlar] = await Promise.all([
+    musteriGetir(musteriId),
+    siparisId ? siparisGetir(siparisId) : null,
+    ayarlariGetir()
+  ]);
+  if (cizimEskidi(cizim)) return;
   if (!musteri) { yerineGit('/musteriler'); return; }
-  const siparis = siparisId ? siparisleriGetir().find(s => s.id === siparisId) : null;
   if (siparisId && !siparis) { yerineGit('/musteri/' + musteriId); return; }
 
   formMusteriId = musteriId;
@@ -893,7 +875,7 @@ function siparisFormunuCiz(musteriId, siparisId) {
 
   // ÖNEMLİ: Yeni siparişte güncel fiyat kullanılır.
   // Eski sipariş düzenlenirken siparişin KENDİ fiyatı korunur.
-  formBirimFiyat = siparis ? siparis.birimFiyat : ayarlariGetir().birimFiyat;
+  formBirimFiyat = siparis ? siparis.birimFiyat : ayarlar.birimFiyat;
 
   ekranGoster('ekran-siparis-formu', siparis ? `Sipariş #${siparis.no}` : 'Yeni Sipariş', '/musteri/' + musteriId, null);
 
@@ -917,53 +899,47 @@ siparisFormu.metrekare.addEventListener('input', toplamiGuncelle);
 
 siparisFormu.addEventListener('submit', olay => {
   olay.preventDefault();
+  islemSirasinda(siparisFormu.querySelector('[type="submit"]'), async () => {
+    const metrekare = sayiOku(siparisFormu.metrekare.value);
+    if (metrekare === null || metrekare <= 0) {
+      alert('Lütfen geçerli bir metrekare girin (örn: 6,5).');
+      return;
+    }
+    if (!siparisFormu.tarih.value) {
+      alert('Lütfen tarih seçin.');
+      return;
+    }
 
-  const metrekare = sayiOku(siparisFormu.metrekare.value);
-  if (metrekare === null || metrekare <= 0) {
-    alert('Lütfen geçerli bir metrekare girin (örn: 6,5).');
-    return;
-  }
-  if (!siparisFormu.tarih.value) {
-    alert('Lütfen tarih seçin.');
-    return;
-  }
-
-  const siparisler = siparisleriGetir();
-  let siparis;
-  if (duzenlenenSiparisId) {
-    siparis = siparisler.find(s => s.id === duzenlenenSiparisId);
-  } else {
-    siparis = {
-      id: yeniId(),
-      no: yeniSiparisNo(),
-      musteriId: formMusteriId,
-      durum: null,
-      odemeAlindi: false,
-      odemeTarihi: null,
-      teslimTarihi: null,
-      olusturma: Date.now()
+    // Formdaki bilgileri siparişe işler (yeni siparişte de, düzenlemede de aynı)
+    const formuIsle = s => {
+      Object.assign(s, {
+        tarih: siparisFormu.tarih.value,
+        metrekare: metrekare,
+        birimFiyat: formBirimFiyat,
+        tutar: yuvarla(metrekare * formBirimFiyat)
+      });
+      // Teslim ve ödeme tarihleri bu fonksiyonlarda ayarlanır
+      durumAyarla(s, siparisFormu.durum.value);
+      odemeAyarla(s, siparisFormu.odemeAlindi.checked);
     };
-    siparisler.push(siparis);
-  }
 
-  Object.assign(siparis, {
-    tarih: siparisFormu.tarih.value,
-    metrekare: metrekare,
-    birimFiyat: formBirimFiyat,
-    tutar: yuvarla(metrekare * formBirimFiyat)
+    let siparis;
+    if (duzenlenenSiparisId) {
+      siparis = await veriIslemi(() => siparisGuncelle(duzenlenenSiparisId, formuIsle));
+    } else {
+      const taslak = { musteriId: formMusteriId, durum: null, odemeAlindi: false, odemeTarihi: null, teslimTarihi: null };
+      formuIsle(taslak);
+      siparis = await veriIslemi(() => siparisEkle(taslak)); // id, no ve zaman bilgilerini veri.js verir
+    }
+    if (!siparis) return; // Uyarı gösterildi; form olduğu gibi kalır
+
+    bildirimGoster(duzenlenenSiparisId ? 'Sipariş güncellendi' : `Sipariş #${siparis.no} eklendi`);
+    geriGit('/musteri/' + formMusteriId);
   });
-  // Teslim ve ödeme tarihleri bu fonksiyonlarda ayarlanır
-  durumAyarla(siparis, siparisFormu.durum.value);
-  odemeAyarla(siparis, siparisFormu.odemeAlindi.checked);
-
-  if (!siparisleriKaydet(siparisler)) return;
-
-  bildirimGoster(duzenlenenSiparisId ? 'Sipariş güncellendi' : `Sipariş #${siparis.no} eklendi`);
-  geriGit('/musteri/' + formMusteriId);
 });
 
 
-/* ===================== 16. YÖNETİCİ ===================== */
+/* ===================== 14. YÖNETİCİ ===================== */
 
 let secilenDonem = 'bugun'; // bugun | hafta | ay | tumu
 
@@ -988,7 +964,11 @@ function donemAraligi(donem) {
   return [null, null];
 }
 
-function yoneticiCiz() {
+async function yoneticiCiz() {
+  const cizim = cizimBaslat();
+  const [siparisler, tumGiderler] = await Promise.all([siparisleriGetir(), giderleriGetir()]);
+  if (cizimEskidi(cizim)) return;
+
   ekranGoster('ekran-yonetici', 'Yönetici', null, 'yonetici');
 
   document.querySelectorAll('#donem-secici button').forEach(b =>
@@ -997,10 +977,11 @@ function yoneticiCiz() {
   const [bas, bit] = donemAraligi(secilenDonem);
   document.getElementById('donem-araligi').textContent =
     !bas ? 'Tüm kayıtlar' : bas === bit ? tarihYaz(bas) : `${tarihYaz(bas)} – ${tarihYaz(bit)}`;
-  document.getElementById('yonetici-kartlari').innerHTML = ozetKutulariHTML(ozetHesapla(bas, bit));
+  document.getElementById('yonetici-kartlari').innerHTML =
+    ozetKutulariHTML(ozetHesapla(siparisler, tumGiderler, bas, bit));
 
   // Bu dönemin giderleri, en yenisi üstte
-  const giderler = giderleriGetir()
+  const giderler = tumGiderler
     .filter(g => (!bas || g.tarih >= bas) && (!bit || g.tarih <= bit))
     .sort((a, b) => b.tarih.localeCompare(a.tarih) || (b.olusturma || 0) - (a.olusturma || 0));
 
@@ -1026,52 +1007,58 @@ document.getElementById('donem-secici').addEventListener('click', olay => {
 document.getElementById('gider-listesi').addEventListener('click', olay => {
   const buton = olay.target.closest('button[data-id]');
   if (!buton) return;
-  const giderler = giderleriGetir();
-  const gider = giderler.find(g => g.id === buton.dataset.id);
-  if (!gider) return;
-  if (!confirm(`"${gider.aciklama}" (${paraYaz(gider.tutar)}) gideri silinsin mi?`)) return;
-  if (giderleriKaydet(giderler.filter(g => g.id !== gider.id))) {
-    yoneticiCiz();
-    bildirimGoster('Gider silindi');
-  }
+  islemSirasinda(buton, async () => {
+    const gider = (await giderleriGetir()).find(g => g.id === buton.dataset.id);
+    if (!gider) return;
+    if (!confirm(`"${gider.aciklama}" (${paraYaz(gider.tutar)}) gideri silinsin mi?`)) return;
+    if (await veriIslemi(() => giderSil(gider.id), SILME_HATASI)) {
+      await yoneticiCiz();
+      bildirimGoster('Gider silindi');
+    }
+  });
 });
 
 document.getElementById('yonetici-gider-ekle').addEventListener('click', () => git('/gider-formu'));
 document.getElementById('ayarlara-git').addEventListener('click', () => git('/ayarlar'));
 
 
-/* ===================== 17. AYARLAR VE YEDEKLEME ===================== */
+/* ===================== 15. AYARLAR VE YEDEKLEME ===================== */
 
 const ayarlarFormu = document.getElementById('ayarlar-formu');
 
-function ayarlariCiz() {
+async function ayarlariCiz() {
+  const cizim = cizimBaslat();
+  const ayarlar = await ayarlariGetir();
+  if (cizimEskidi(cizim)) return;
+
   ekranGoster('ekran-ayarlar', 'Ayarlar', '/yonetici', 'yonetici');
-  ayarlarFormu.birimFiyat.value = String(ayarlariGetir().birimFiyat).replace('.', ',');
+  ayarlarFormu.birimFiyat.value = String(ayarlar.birimFiyat).replace('.', ',');
   surumuGoster();
 }
 
 ayarlarFormu.addEventListener('submit', olay => {
   olay.preventDefault();
-  const fiyat = sayiOku(ayarlarFormu.birimFiyat.value);
-  if (fiyat === null || fiyat <= 0) {
-    alert('Lütfen geçerli bir fiyat girin (örn: 100 veya 112,50).');
-    return;
-  }
-  const ayarlar = ayarlariGetir();
-  ayarlar.birimFiyat = yuvarla(fiyat);
-  if (ayarlariKaydet(ayarlar)) bildirimGoster('Yeni fiyat: ' + paraYaz(ayarlar.birimFiyat) + ' / m²');
+  islemSirasinda(ayarlarFormu.querySelector('[type="submit"]'), async () => {
+    const fiyat = sayiOku(ayarlarFormu.birimFiyat.value);
+    if (fiyat === null || fiyat <= 0) {
+      alert('Lütfen geçerli bir fiyat girin (örn: 100 veya 112,50).');
+      return;
+    }
+    if (await veriIslemi(() => birimFiyatKaydet(yuvarla(fiyat)))) {
+      bildirimGoster('Yeni fiyat: ' + paraYaz(yuvarla(fiyat)) + ' / m²');
+    }
+  });
 });
 
-// --- Yedeği indir: tüm veriyi bir .json dosyası olarak kaydeder ---
+// --- Yedeği indir: tüm veriyi (silinmişler dahil) bir .json dosyası olarak kaydeder ---
 // Hem Ayarlar'daki hem ana ekrandaki "Şimdi Yedekle" butonu bunu kullanır.
-function yedekIndir() {
+async function yedekIndir() {
+  const veri = await veriIslemi(tumVeriyiGetir, 'Yedek hazırlanamadı, tekrar deneyin.');
+  if (!veri) return;
   const yedek = {
     uygulama: 'hali-yikama',
     yedekTarihi: new Date().toISOString(),
-    musteriler: musterileriGetir(),
-    siparisler: siparisleriGetir(),
-    giderler: giderleriGetir(),
-    ayarlar: ayarlariGetir()
+    ...veri // musteriler, siparisler, giderler, ayarlar
   };
   const dosya = new Blob([JSON.stringify(yedek, null, 2)], { type: 'application/json' });
   const baglanti = document.createElement('a');
@@ -1082,11 +1069,13 @@ function yedekIndir() {
   baglanti.remove();
   setTimeout(() => URL.revokeObjectURL(baglanti.href), 5000);
 
-  yaz(ANAHTAR_SON_YEDEK, Date.now()); // Hatırlatıcı sıfırlansın
+  // Hatırlatıcı sıfırlansın (dosya indi ama tarih yazılamazsa bunu da söyle)
+  if (!await veriIslemi(sonYedekKaydet, 'Yedek indirildi ama yedek tarihi kaydedilemedi.')) return;
   bildirimGoster('Yedek dosyası hazırlandı');
 }
 
-document.getElementById('yedek-indir-butonu').addEventListener('click', yedekIndir);
+document.getElementById('yedek-indir-butonu').addEventListener('click', olay =>
+  islemSirasinda(olay.currentTarget, yedekIndir));
 
 // --- Yedekten geri yükle: seçilen dosyadaki veriyi cihaza yazar ---
 const yedekDosyasiSecici = document.getElementById('yedek-dosyasi');
@@ -1101,7 +1090,7 @@ yedekDosyasiSecici.addEventListener('change', () => {
   if (!dosya) return;
 
   const okuyucu = new FileReader();
-  okuyucu.onload = () => {
+  okuyucu.onload = async () => {
     let yedek;
     try {
       yedek = JSON.parse(okuyucu.result);
@@ -1113,22 +1102,17 @@ yedekDosyasiSecici.addEventListener('change', () => {
       alert('Bu dosya bir halı yıkama yedeği değil.');
       return;
     }
-    // Eski sürüm yedeklerinde gider yoktur
-    const giderler = Array.isArray(yedek.giderler) ? yedek.giderler : [];
 
-    const soru = `Yedekte ${yedek.musteriler.length} müşteri, ${yedek.siparisler.length} sipariş ve ${giderler.length} gider var.\n\n` +
+    const sayilar = await yedektekiKayitSayilari(yedek);
+    const soru = `Yedekte ${sayilar.musteri} müşteri, ${sayilar.siparis} sipariş ve ${sayilar.gider} gider var.\n\n` +
       'Geri yüklerseniz bu cihazdaki MEVCUT TÜM VERİ silinip yedektekiyle değiştirilecek. Devam edilsin mi?';
     if (!confirm(soru)) return;
 
-    const ayarlar = yedek.ayarlar && Number(yedek.ayarlar.birimFiyat) > 0
-      ? yedek.ayarlar
-      : { birimFiyat: VARSAYILAN_BIRIM_FIYAT };
-
-    if (musterileriKaydet(yedek.musteriler) && siparisleriKaydet(yedek.siparisler) &&
-        giderleriKaydet(giderler) && ayarlariKaydet(ayarlar)) {
-      veriyiDuzenle(); // Eski sürüm yedeğiyse durum adlarını, numaraları vb. tamamla
+    // Eski sürüm yedeğiyse eksik alanlar (durum adları, numaralar, zamanlar) veri.js'de tamamlanır
+    if (await veriIslemi(() => tumVeriyiDegistir(yedek),
+        'Yedek geri yüklenemedi, tekrar deneyin. Cihazdaki veri değişmedi.')) {
       alert('Yedek başarıyla geri yüklendi.');
-      ayarlariCiz();
+      await ayarlariCiz();
     }
   };
   okuyucu.readAsText(dosya);
@@ -1145,7 +1129,7 @@ function surumuGoster() {
 }
 
 
-/* ===================== 18. SERVICE WORKER =====================
+/* ===================== 16. SERVICE WORKER =====================
    Service worker uygulamanın internetsiz çalışmasını sağlar.
    Yeni sürüm yüklendiğinde sayfa otomatik yenilenir.
    ============================================================= */
@@ -1175,5 +1159,7 @@ if ('serviceWorker' in navigator) {
 
 
 /* ===================== BAŞLANGIÇ ===================== */
-veriyiDuzenle(); // Eski sürümden kalan veriyi yeni yapıya uyarla
-sayfayiCiz();
+(async () => {
+  await veriyiDuzenle(); // Eski sürümden kalan veriyi yeni yapıya uyarla
+  await sayfayiCiz();
+})();
