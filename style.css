@@ -352,10 +352,6 @@ select:disabled {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-.ozet-kutu.genis {
-  grid-column: span 2;
-}
-
 .ozet-baslik {
   color: var(--soluk-yazi);
   font-size: 14px;
@@ -572,15 +568,44 @@ select:disabled {
   margin-bottom: 8px;
 }
 
-.odeme-butonu.odendi {
-  background: var(--basari);
-  border-color: var(--basari);
-  color: #fff;
+/* Sipariş kartında ödeme: ödenmemişse "Ödeme al: [Nakit][Kart][Havale]" */
+.odeme-al {
+  margin-bottom: 8px;
 }
 
-.odeme-butonu.odenmedi {
-  border-color: var(--tehlike);
+.odeme-al-baslik {
+  display: block;
+  margin-bottom: 6px;
   color: var(--tehlike);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* Ödenmişse yeşil şerit: "✓ Nakit · 15 Ekim 2026  [Geri al]" */
+.odeme-durumu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 6px 6px 6px 12px;
+  border-radius: var(--kose);
+  background: #e8f5e9;
+  color: var(--basari);
+  font-weight: 700;
+}
+
+.odeme-durumu span {
+  flex: 1;
+}
+
+.odeme-durumu .buton {
+  width: auto;
+}
+
+/* Gri, ikincil buton (örn. "Geri al") */
+.buton-gri {
+  border-color: var(--cizgi);
+  color: var(--soluk-yazi);
 }
 
 /* Durum renkleri (satırların ve sipariş kartlarının sol kenarı) */
@@ -686,6 +711,219 @@ select:focus,
 .aciklama {
   color: var(--soluk-yazi);
   font-size: 15px;
+}
+
+.kucuk-not {
+  margin: 6px 0 0;
+  color: var(--soluk-yazi);
+  font-size: 13px;
+}
+
+/* ===== Form: yan yana iki alan (m² ve parça sayısı) ===== */
+.iki-alan {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* ===== Form: seçim butonları (Nakit/Kart/Havale, Yakıt/Malzeme/Diğer) =====
+   Aslında radyo düğmesi; görünüşte büyük buton. */
+.form-alan {
+  margin-bottom: 14px;
+}
+
+.alan-baslik {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.secim-grubu {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.form .secim {
+  display: block;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Gerçek radyo düğmesini gizle (ama erişilebilir kalsın) */
+.secim input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.secim span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  border: 2px solid var(--ana-renk);
+  border-radius: var(--kose);
+  background: #fff;
+  color: var(--ana-renk);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.secim input:checked + span {
+  background: var(--ana-renk);
+  color: #fff;
+}
+
+.secim input:focus-visible + span {
+  outline: 3px solid var(--ana-renk-koyu);
+  outline-offset: 2px;
+}
+
+/* ===== Form uyarısı: eksik/hatalı alanın hemen altında ===== */
+.alan-hatasi {
+  margin: 6px 0 0;
+  color: var(--tehlike);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.alan-hatasi::before {
+  content: "⚠ ";
+}
+
+.alan-hatali input,
+.alan-hatali .secim span {
+  border-color: var(--tehlike);
+}
+
+/* ===== Yönetici / Gün Özeti: dönem kartı ===== */
+.donem-karti {
+  margin: 12px 0;
+  padding: 16px;
+  border-radius: var(--kose);
+  background: var(--kart);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.donem-ust {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.donem-adi {
+  color: var(--ana-renk);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.donem-tarih {
+  color: var(--soluk-yazi);
+  font-size: 14px;
+}
+
+.tahsilat-satiri {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.tahsilat-etiket {
+  color: var(--soluk-yazi);
+  font-weight: 600;
+}
+
+.tahsilat-tutar {
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.degisim {
+  font-size: 15px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.degisim.artis { color: var(--basari); }
+.degisim.dusus { color: var(--tehlike); }
+.degisim.ayni  { color: var(--soluk-yazi); }
+
+.kart-bolum-baslik {
+  display: flex;
+  justify-content: space-between;
+  margin: 16px 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.kart-bolum-baslik.gelir { color: var(--ana-renk); }
+.kart-bolum-baslik.gider { color: var(--tehlike); }
+
+.uclu {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.mini-kutu {
+  padding: 10px 4px;
+  border-radius: 10px;
+  background: #f2f5f9;
+  text-align: center;
+}
+
+.mini-baslik {
+  color: var(--soluk-yazi);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mini-deger {
+  font-size: 17px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* Dört küçük gösterge: yeni müşteri, sipariş, m², parça */
+.gostergeler {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cizgi);
+  text-align: center;
+}
+
+.gosterge-deger {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.gosterge-ad {
+  color: var(--soluk-yazi);
+  font-size: 13px;
+}
+
+.alt-butonlar {
+  margin-top: 16px;
+}
+
+/* Gider listesi: toplam satırı ve tür etiketi */
+.toplam-satiri {
+  display: flex;
+  justify-content: space-between;
+  font-size: 18px;
+}
+
+.tur-etiketi {
+  background: #eef1f5;
+  color: var(--yazi);
 }
 
 .surum {

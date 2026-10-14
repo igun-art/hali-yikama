@@ -53,10 +53,10 @@
       <p id="durum-bos" class="bos-mesaj" hidden></p>
     </section>
 
-    <!-- Gün özeti -->
+    <!-- Gün özeti: Yönetici'deki "Bugün" kartının aynısı + bugünün siparişleri -->
     <section id="ekran-gun-ozeti" class="ekran" hidden>
-      <p id="gun-tarihi" class="aralik-yazisi"></p>
-      <div id="gun-ozeti-kartlari" class="ozet-izgara"></div>
+      <div id="gun-ozeti-karti"></div>
+      <div id="gun-ozeti-finans" class="ozet-izgara"></div>
       <h3 class="bolum-basligi">Bugünün siparişleri</h3>
       <ul id="gun-siparisleri" class="liste siparis-satirlari"></ul>
       <p id="gun-bos" class="bos-mesaj" hidden>Bugün tarihli sipariş yok.</p>
@@ -64,15 +64,22 @@
 
     <!-- Gider ekleme formu -->
     <section id="ekran-gider-formu" class="ekran" hidden>
-      <form id="gider-formu" class="form">
+      <form id="gider-formu" class="form" novalidate>
         <label>Tarih
-          <input type="date" name="tarih" required>
+          <input type="date" name="tarih">
+          <p class="alan-hatasi" data-alan="tarih" hidden></p>
         </label>
         <label>Tutar (₺)
-          <input type="text" name="tutar" inputmode="decimal" required placeholder="Örn: 450" autocomplete="off">
+          <input type="text" name="tutar" inputmode="decimal" placeholder="Örn: 450" autocomplete="off">
+          <p class="alan-hatasi" data-alan="tutar" hidden></p>
         </label>
-        <label>Açıklama
-          <input type="text" name="aciklama" placeholder="Örn: Deterjan, yakıt, kira" autocomplete="off">
+        <div class="form-alan">
+          <span class="alan-baslik">Gider türü</span>
+          <div class="secim-grubu" id="gider-turu-secenekleri"></div>
+          <p class="alan-hatasi" data-alan="tur" hidden></p>
+        </div>
+        <label>Açıklama (isteğe bağlı)
+          <input type="text" name="aciklama" placeholder="Örn: Deterjan, mazot" autocomplete="off">
         </label>
         <button type="submit" class="buton buton-ana">Gideri Kaydet</button>
       </form>
@@ -80,9 +87,9 @@
 
     <!-- Sipariş numarasıyla arama -->
     <section id="ekran-siparis-bul" class="ekran" hidden>
-      <form id="siparis-bul-formu" class="form">
+      <form id="siparis-bul-formu" class="form" novalidate>
         <label>Sipariş numarası
-          <input type="text" name="no" inputmode="numeric" required placeholder="Örn: 27" autocomplete="off">
+          <input type="text" name="no" inputmode="numeric" placeholder="Örn: 27" autocomplete="off">
         </label>
         <button type="submit" class="buton buton-ana">Bul</button>
       </form>
@@ -106,6 +113,7 @@
         <h2 id="detay-isim"></h2>
         <a id="detay-telefon" class="telefon-link" href="#"></a>
         <p id="detay-adres" class="adres"></p>
+        <p id="detay-kayit" class="kucuk-not"></p>
         <div class="buton-satiri">
           <button class="buton" id="musteri-duzenle-butonu">Düzenle</button>
           <button class="buton buton-tehlike" id="musteri-sil-butonu">Sil</button>
@@ -120,15 +128,18 @@
 
     <!-- Müşteri ekleme / düzenleme formu -->
     <section id="ekran-musteri-formu" class="ekran" hidden>
-      <form id="musteri-formu" class="form">
+      <form id="musteri-formu" class="form" novalidate>
         <label>Ad
-          <input type="text" name="ad" required autocomplete="off">
+          <input type="text" name="ad" autocomplete="off">
+          <p class="alan-hatasi" data-alan="ad" hidden></p>
         </label>
         <label>Soyad
-          <input type="text" name="soyad" required autocomplete="off">
+          <input type="text" name="soyad" autocomplete="off">
+          <p class="alan-hatasi" data-alan="soyad" hidden></p>
         </label>
         <label>Telefon
-          <input type="tel" name="telefon" required placeholder="05XX XXX XX XX" autocomplete="off">
+          <input type="tel" name="telefon" placeholder="05XX XXX XX XX" autocomplete="off">
+          <p class="alan-hatasi" data-alan="telefon" hidden></p>
         </label>
         <label>Adres
           <textarea name="adres" rows="3"></textarea>
@@ -139,14 +150,22 @@
 
     <!-- Sipariş ekleme / düzenleme formu -->
     <section id="ekran-siparis-formu" class="ekran" hidden>
-      <form id="siparis-formu" class="form">
+      <form id="siparis-formu" class="form" novalidate>
         <p class="form-musteri" id="siparis-formu-musteri"></p>
         <label>Tarih
-          <input type="date" name="tarih" required>
+          <input type="date" name="tarih">
+          <p class="alan-hatasi" data-alan="tarih" hidden></p>
         </label>
-        <label>Halı metrekaresi (m²)
-          <input type="text" name="metrekare" inputmode="decimal" required placeholder="Örn: 6,5" autocomplete="off">
-        </label>
+        <div class="iki-alan">
+          <label>Metrekare (m²)
+            <input type="text" name="metrekare" inputmode="decimal" placeholder="Örn: 6,5" autocomplete="off">
+            <p class="alan-hatasi" data-alan="metrekare" hidden></p>
+          </label>
+          <label>Parça sayısı
+            <input type="text" name="parcaSayisi" inputmode="numeric" placeholder="Kaç halı?" autocomplete="off">
+            <p class="alan-hatasi" data-alan="parcaSayisi" hidden></p>
+          </label>
+        </div>
         <label>Durum
           <select name="durum"></select>
         </label>
@@ -154,6 +173,12 @@
           <input type="checkbox" name="odemeAlindi">
           Ödeme alındı
         </label>
+        <!-- "Ödeme alındı" işaretlenince görünür; seçim zorunludur -->
+        <div class="form-alan" id="odeme-yontemi-alani" hidden>
+          <span class="alan-baslik">Ödeme yöntemi</span>
+          <div class="secim-grubu" id="odeme-yontemi-secenekleri"></div>
+          <p class="alan-hatasi" data-alan="odemeYontemi" hidden></p>
+        </div>
         <div class="tutar-kutusu">
           <div>Birim fiyat: <strong id="form-birim-fiyat"></strong> / m²</div>
           <div class="tutar-buyuk">Toplam: <strong id="form-toplam">0,00 ₺</strong></div>
@@ -164,28 +189,46 @@
 
     <!-- ===== SEKME 3: YÖNETİCİ ===== -->
     <section id="ekran-yonetici" class="ekran" hidden>
-      <div class="donem-secici" id="donem-secici">
+      <div class="donem-secici">
         <button data-donem="bugun">Bugün</button>
         <button data-donem="hafta">Bu Hafta</button>
         <button data-donem="ay">Bu Ay</button>
         <button data-donem="tumu">Tümü</button>
       </div>
-      <p id="donem-araligi" class="aralik-yazisi"></p>
-      <div id="yonetici-kartlari" class="ozet-izgara"></div>
+      <!-- Dönem kartı: tahsilat, gelir, gider, göstergeler (app.js doldurur) -->
+      <div id="yonetici-karti"></div>
+      <!-- Ciro, Net (iş), Kasa, Ödenmemiş -->
+      <div id="yonetici-finans" class="ozet-izgara"></div>
+      <div class="buton-satiri alt-butonlar">
+        <button class="buton" id="ayarlara-git">Ayarlar</button>
+        <button class="buton" id="gider-listesine-git">Gider Listesi</button>
+      </div>
+    </section>
 
-      <h3 class="bolum-basligi">Giderler</h3>
-      <button class="buton" id="yonetici-gider-ekle">+ Gider Ekle</button>
+    <!-- Gider listesi -->
+    <section id="ekran-giderler" class="ekran" hidden>
+      <div class="donem-secici">
+        <button data-donem="bugun">Bugün</button>
+        <button data-donem="hafta">Bu Hafta</button>
+        <button data-donem="ay">Bu Ay</button>
+        <button data-donem="tumu">Tümü</button>
+      </div>
+      <p id="giderler-araligi" class="aralik-yazisi"></p>
+      <div class="kart toplam-satiri">
+        <span>Toplam gider</span>
+        <strong id="giderler-toplam"></strong>
+      </div>
+      <button class="buton buton-ana" id="gider-listesinden-ekle">+ Gider Ekle</button>
       <ul id="gider-listesi" class="liste"></ul>
       <p id="gider-yok" class="bos-mesaj" hidden>Bu dönemde gider yok.</p>
-
-      <button class="buton" id="ayarlara-git">Ayarlar (fiyat ve yedekleme)</button>
     </section>
 
     <!-- Ayarlar -->
     <section id="ekran-ayarlar" class="ekran" hidden>
-      <form id="ayarlar-formu" class="form kart">
+      <form id="ayarlar-formu" class="form kart" novalidate>
         <label>Metrekare birim fiyatı (₺)
-          <input type="text" name="birimFiyat" inputmode="decimal" required autocomplete="off">
+          <input type="text" name="birimFiyat" inputmode="decimal" autocomplete="off">
+          <p class="alan-hatasi" data-alan="birimFiyat" hidden></p>
         </label>
         <p class="aciklama">Fiyat değişikliği sadece yeni siparişleri etkiler. Eski siparişler kendi fiyatlarını korur.</p>
         <button type="submit" class="buton buton-ana">Fiyatı Kaydet</button>

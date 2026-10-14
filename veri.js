@@ -53,6 +53,12 @@ const VARSAYILAN_BIRIM_FIYAT = 100; // TL / m²
 const DURUMLAR = ['Teslim Alındı', 'Bekliyor', 'Yıkamada', 'Hazır', 'Teslim Edildi'];
 const TESLIM_EDILDI = 'Teslim Edildi';
 
+// Ödeme yöntemleri (ödeme alınırken biri SEÇİLMEK ZORUNDA; Kasa = sadece Nakit)
+const ODEME_YONTEMLERI = ['Nakit', 'Kart', 'Havale'];
+
+// Gider türleri (gider eklenirken biri SEÇİLMEK ZORUNDA)
+const GIDER_TURLERI = ['Yakıt', 'Malzeme', 'Diğer'];
+
 // Eski sürümlerdeki durum adlarının yeni karşılıkları
 const ESKI_DURUMLAR = {
   'Teslim alındı': 'Teslim Alındı',
@@ -222,7 +228,8 @@ async function yeniSiparisNo() {
   return ayarlar.sonSiparisNo;
 }
 
-// bilgiler: { musteriId, tarih, metrekare, birimFiyat, tutar, durum, odemeAlindi, odemeTarihi, teslimTarihi }
+// bilgiler: { musteriId, tarih, metrekare, parcaSayisi, birimFiyat, tutar, durum,
+//             odemeAlindi, odemeTarihi, odemeYontemi, teslimTarihi }
 async function siparisEkle(bilgiler) {
   return kayitEkle(ANAHTAR_SIPARISLER, { no: await yeniSiparisNo(), ...bilgiler });
 }
@@ -243,7 +250,7 @@ async function giderleriGetir() {
   return silinmemisler(depodanOku(ANAHTAR_GIDERLER, []));
 }
 
-// bilgiler: { tarih, tutar, aciklama }
+// bilgiler: { tarih, tutar, tur, aciklama }
 async function giderEkle(bilgiler) {
   return kayitEkle(ANAHTAR_GIDERLER, bilgiler);
 }
@@ -354,6 +361,17 @@ async function veriyiDuzenle() {
     // Teslim edilmiş ama teslim tarihi olmayan eski siparişlerde de sipariş tarihi kullanılır
     if (s.durum === TESLIM_EDILDI && !s.teslimTarihi) s.teslimTarihi = s.tarih;
     if (s.durum !== TESLIM_EDILDI) s.teslimTarihi = null;
+
+    // Ödeme yöntemi ve parça sayısı UYDURULMAZ: bilinmiyorsa boş (null) kalır.
+    // (Yöntemi bilinmeyen ödeme Kasa'ya girmez, raporda "belirtilmemiş" görünür;
+    //  parça sayısı sipariş düzenlenirken girilmek zorundadır.)
+    if (!s.odemeAlindi || !ODEME_YONTEMLERI.includes(s.odemeYontemi)) s.odemeYontemi = null;
+    if (!(Number(s.parcaSayisi) >= 1)) s.parcaSayisi = null;
+  });
+
+  // Gider türü de uydurulmaz: bilinmiyorsa boş kalır, raporda "belirtilmemiş" görünür
+  giderler.forEach(g => {
+    if (!GIDER_TURLERI.includes(g.tur)) g.tur = null;
   });
 
   // Numarası olmayan siparişlere, oluşturulma sırasına göre numara ver

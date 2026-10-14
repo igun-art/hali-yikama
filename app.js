@@ -11,26 +11,27 @@
 
    Bölümler:
      1. Sabitler
-     2. Yardımcı fonksiyonlar (para, tarih, sayı biçimleri, çift basma koruması)
-     3. Sipariş işlemleri (durum, ödeme, özet hesaplama)
-     4. Ekranlar arası geçiş ve alt menü
-     5. Ana Ekran (durum satırları, hızlı erişim, yedek hatırlatıcısı)
-     6. Durum listesi (örn. "Yıkamada" olan siparişler)
-     7. Gün Özeti
-     8. Gider formu
-     9. Sipariş Bul
-    10. Müşteriler (liste ve arama)
-    11. Müşteri detayı ve siparişleri
-    12. Müşteri formu
-    13. Sipariş formu
-    14. Yönetici (ciro, tahsilat, gider)
-    15. Ayarlar ve yedekleme
-    16. Service worker (internetsiz çalışma ve güncelleme)
+     2. Yardımcı fonksiyonlar (biçimler, uyarılar, form uyarıları, çift basma koruması)
+     3. Sipariş işlemleri (durum, ödeme, sipariş satırı)
+     4. Raporlar (dönemler, gelir/gider hesabı, dönem kartı)
+     5. Ekranlar arası geçiş ve alt menü
+     6. Ana Ekran (durum satırları, hızlı erişim, yedek hatırlatıcısı)
+     7. Durum listesi (örn. "Yıkamada" olan siparişler)
+     8. Gün Özeti
+     9. Gider formu
+    10. Sipariş Bul
+    11. Müşteriler (liste ve arama)
+    12. Müşteri detayı ve siparişleri
+    13. Müşteri formu
+    14. Sipariş formu
+    15. Yönetici ve Gider Listesi
+    16. Ayarlar ve yedekleme
+    17. Service worker (internetsiz çalışma ve güncelleme)
    ===================================================================== */
 
 
 /* ===================== 1. SABİTLER =====================
-   (Sipariş durumları DURUMLAR ve TESLIM_EDILDI veri.js'dedir.) */
+   (DURUMLAR, TESLIM_EDILDI, ODEME_YONTEMLERI ve GIDER_TURLERI veri.js'dedir.) */
 
 const YEDEK_UYARI_GUN = 7; // Bu kadar günden eski yedek kırmızı uyarı verir
 
@@ -63,9 +64,11 @@ async function islemSirasinda(buton, islem) {
 }
 
 const paraBicimi = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' });
+const kisaParaBicimi = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 });
 const sayiBicimi = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 });
 
 function paraYaz(tutar) { return paraBicimi.format(tutar || 0); }
+function paraKisa(tutar) { return kisaParaBicimi.format(tutar || 0); } // Kuruşsuz: ₺4.700 (dar kutular için)
 function sayiYaz(sayi) { return sayiBicimi.format(sayi || 0); }
 
 // Kullanıcının yazdığı sayıyı okur. "6,5" ve "6.5" ikisi de 6.5 olur.
@@ -80,6 +83,12 @@ function sayiOku(metin) {
   return temiz !== '' && isFinite(sayi) ? sayi : null;
 }
 
+// Tam sayı okur ("3" -> 3). Geçersizse (boş, "2,5", "abc") null döndürür.
+function tamSayiOku(metin) {
+  const temiz = String(metin || '').trim();
+  return /^\d+$/.test(temiz) ? Number(temiz) : null;
+}
+
 // Kuruş hatalarını önlemek için 2 basamağa yuvarlar
 function yuvarla(sayi) {
   return Math.round(sayi * 100) / 100;
@@ -90,6 +99,11 @@ function tarihMetni(tarih) {
   const ay = String(tarih.getMonth() + 1).padStart(2, '0');
   const gun = String(tarih.getDate()).padStart(2, '0');
   return `${tarih.getFullYear()}-${ay}-${gun}`;
+}
+
+// Bir tarihe gün ekler/çıkarır: gunEkle(bugünTarih, -1) -> dün
+function gunEkle(tarih, gun) {
+  return new Date(tarih.getFullYear(), tarih.getMonth(), tarih.getDate() + gun);
 }
 
 // Bugünün tarihi "2026-10-12" biçiminde
@@ -186,6 +200,56 @@ window.addEventListener('unhandledrejection', olay => {
   hataGoster('Bir hata oluştu, tekrar deneyin.');
 });
 
+// --- Form uyarıları: eksik/hatalı alanın hemen altında kırmızı yazı ---
+// HTML'de her alanın altında <p class="alan-hatasi" data-alan="ALAN_ADI" hidden> bulunur.
+
+function alanHatasiGoster(form, alan, mesaj) {
+  const kutu = form.querySelector(`.alan-hatasi[data-alan="${alan}"]`);
+  kutu.textContent = mesaj;
+  kutu.hidden = false;
+  const alanKutusu = kutu.closest('label, .form-alan');
+  if (alanKutusu) alanKutusu.classList.add('alan-hatali'); // Alanın çerçevesi de kırmızı olur
+}
+
+// alan verilmezse formdaki tüm uyarıları kaldırır
+function alanHatalariniTemizle(form, alan) {
+  const secici = alan ? `.alan-hatasi[data-alan="${alan}"]` : '.alan-hatasi';
+  form.querySelectorAll(secici).forEach(kutu => {
+    kutu.hidden = true;
+    const alanKutusu = kutu.closest('label, .form-alan');
+    if (alanKutusu) alanKutusu.classList.remove('alan-hatali');
+  });
+}
+
+// Formda uyarı varsa ilk uyarılı alana kaydırır ve true döndürür
+function formdaHataVar(form) {
+  const ilk = form.querySelector('.alan-hatasi:not([hidden])');
+  if (ilk) ilk.closest('label, .form-alan').scrollIntoView({ block: 'center' });
+  return !!ilk;
+}
+
+// Kullanıcı bir alanı düzeltmeye başlayınca o alanın uyarısı kalksın
+document.querySelectorAll('form').forEach(form => {
+  const temizle = olay => { if (olay.target.name) alanHatalariniTemizle(form, olay.target.name); };
+  form.addEventListener('input', temizle);
+  form.addEventListener('change', temizle);
+});
+
+// --- Seçim butonları (Nakit/Kart/Havale, Yakıt/Malzeme/Diğer) ---
+// Görünüşte büyük buton, aslında radyo düğmesi: form.ALAN_ADI.value ile okunur.
+function secimGrubuDoldur(kapsayiciId, ad, secenekler) {
+  document.getElementById(kapsayiciId).innerHTML = secenekler.map(secenek => `
+    <label class="secim">
+      <input type="radio" name="${ad}" value="${secenek}">
+      <span>${secenek}</span>
+    </label>`).join('');
+}
+
+// Seçimi ayarlar; deger boşsa (null) hiçbiri seçili olmaz
+function secimYap(form, ad, deger) {
+  form.querySelectorAll(`input[name="${ad}"]`).forEach(radyo => { radyo.checked = radyo.value === deger; });
+}
+
 
 /* ===================== 3. SİPARİŞ İŞLEMLERİ ===================== */
 
@@ -200,11 +264,13 @@ function durumAyarla(siparis, yeniDurum) {
   siparis.durum = yeniDurum;
 }
 
-// Ödeme işaretini değiştirir. Ödemenin alındığı gün kaydedilir (tahsilat için).
-function odemeAyarla(siparis, alindi) {
+// Ödeme bilgisini değiştirir. Ödemenin alındığı gün (tahsilat için) ve
+// yöntemi (Nakit/Kart/Havale; Kasa için) kaydedilir. Ödeme geri alınırsa ikisi de silinir.
+function odemeAyarla(siparis, alindi, yontem) {
   if (alindi && !siparis.odemeAlindi) siparis.odemeTarihi = bugun();
   if (!alindi) siparis.odemeTarihi = null;
   siparis.odemeAlindi = alindi;
+  siparis.odemeYontemi = alindi ? yontem : null;
 }
 
 // Bir sonraki durum ("Bekliyor" -> "Yıkamada"). Son durumdaysa null.
@@ -231,50 +297,10 @@ function durumdakiSiparisler(siparisler, durumNo) {
     s.durum === durum && (durum !== TESLIM_EDILDI || s.teslimTarihi === bugun()));
 }
 
-// İki tarih arasındaki ("2026-10-01" ile "2026-10-31" gibi) rakamları hesaplar.
-// bas/bit null ise o taraf sınırsızdır (Tümü). Silinmiş kayıtlar zaten listede yoktur.
-//   Ciro      : sipariş tarihi bu aralıkta olan siparişlerin toplamı
-//   Tahsilat  : ödeme tarihi bu aralıkta olan siparişlerin toplamı (kasaya giren para)
-//   Net (iş)  : ciro − gider (yapılan işin kârı)
-//   Kasa      : tahsilat − gider (eldeki paranın değişimi)
-function ozetHesapla(siparisler, giderler, bas, bit) {
-  const aralikta = tarih => !!tarih && (!bas || tarih >= bas) && (!bit || tarih <= bit);
-  const toplam = liste => yuvarla(liste.reduce((t, x) => t + (Number(x.tutar) || 0), 0));
-
-  const donemSiparisleri = siparisler.filter(s => aralikta(s.tarih));
-  const ciro = toplam(donemSiparisleri);
-  const tahsilat = toplam(siparisler.filter(s => s.odemeAlindi && aralikta(s.odemeTarihi)));
-  const gider = toplam(giderler.filter(g => aralikta(g.tarih)));
-
-  return {
-    siparisSayisi: donemSiparisleri.length,
-    teslimSayisi: siparisler.filter(s => s.durum === TESLIM_EDILDI && aralikta(s.teslimTarihi)).length,
-    ciro: ciro,
-    tahsilat: tahsilat,
-    odenmemis: toplam(donemSiparisleri.filter(s => !s.odemeAlindi)),
-    gider: gider,
-    net: yuvarla(ciro - gider),
-    kasa: yuvarla(tahsilat - gider)
-  };
-}
-
-// Özet rakamlarını kutucuklar halinde gösterir (Gün Özeti ve Yönetici ekranları).
-// İki sütun: solda sipariş tarihine göre olanlar (Ciro, Net), sağda kasaya göre olanlar (Tahsilat, Kasa).
-function ozetKutulariHTML(ozet) {
-  const kutu = (baslik, deger, not, sinif = '') => `
-    <div class="ozet-kutu ${sinif}">
-      <div class="ozet-baslik">${baslik}</div>
-      <div class="ozet-deger">${deger}</div>
-      <div class="ozet-not">${not}</div>
-    </div>`;
-  return kutu('Sipariş', ozet.siparisSayisi, 'adet') +
-    kutu('Teslim edilen', ozet.teslimSayisi, 'adet') +
-    kutu('Ciro', paraYaz(ozet.ciro), 'sipariş tarihine göre') +
-    kutu('Tahsilat', paraYaz(ozet.tahsilat), 'kasaya giren para', 'olumlu') +
-    kutu('Ödenmemiş', paraYaz(ozet.odenmemis), 'ödemesi alınmamış') +
-    kutu('Gider', paraYaz(ozet.gider), '') +
-    kutu('Net (iş)', paraYaz(ozet.net), 'ciro − gider', ozet.net < 0 ? 'olumsuz' : '') +
-    kutu('Kasa', paraYaz(ozet.kasa), 'tahsilat − gider', ozet.kasa < 0 ? 'olumsuz' : '');
+// "3 parça · 6,5 m²" (parça sayısı bilinmiyorsa sadece m²)
+function parcaVeMetrekare(s) {
+  const parca = s.parcaSayisi ? `${s.parcaSayisi} parça · ` : '';
+  return `${parca}${sayiYaz(s.metrekare)} m²`;
 }
 
 // Durum listesinde ve gün özetinde kullanılan sipariş satırı.
@@ -284,7 +310,7 @@ function siparisSatiriHTML(s, musteriler, ileriButonuVar) {
   const musteri = musteriler.get(s.musteriId);
   const isim = musteri ? `${guvenli(musteri.ad)} ${guvenli(musteri.soyad)}` : '(silinmiş müşteri)';
   const odeme = s.odemeAlindi
-    ? '<span class="etiket odendi">Ödendi</span>'
+    ? `<span class="etiket odendi">${s.odemeYontemi || 'Ödendi'}</span>`
     : '<span class="etiket odenmedi">Ödenmedi</span>';
   const ileri = ileriButonuVar && sonrakiDurum(s.durum)
     ? `<button class="buton buton-kucuk buton-ana ileri-butonu" data-islem="ileri" data-id="${guvenli(s.id)}">${SONRAKI_ADIM[s.durum]}</button>`
@@ -293,7 +319,7 @@ function siparisSatiriHTML(s, musteriler, ileriButonuVar) {
     <li class="siparis-satiri ${durumSinifi(s.durum)}">
       <button class="satir-icerik" data-islem="ac" data-id="${guvenli(s.id)}" data-musteri="${guvenli(s.musteriId)}">
         <div class="satir-ust"><span class="siparis-no">#${s.no}</span> ${isim}</div>
-        <div class="musteri-alt">${tarihYaz(s.tarih)} · ${sayiYaz(s.metrekare)} m² · ${paraYaz(s.tutar)} ${odeme}</div>
+        <div class="musteri-alt">${tarihYaz(s.tarih)} · ${parcaVeMetrekare(s)} · ${paraYaz(s.tutar)} ${odeme}</div>
       </button>
       ${ileri}
     </li>`;
@@ -322,7 +348,210 @@ document.querySelectorAll('.siparis-satirlari').forEach(liste =>
   liste.addEventListener('click', siparisSatirinaTiklandi));
 
 
-/* ===================== 4. EKRANLAR ARASI GEÇİŞ VE ALT MENÜ =====================
+/* ===================== 4. RAPORLAR =====================
+   Yönetici ve Gün Özeti ekranlarındaki rakamlar burada hesaplanır.
+   Silinmiş kayıtlar zaten veri.js'den gelmez, hesaba girmez.
+   ====================================================== */
+
+let secilenDonem = 'bugun'; // bugun | hafta | ay | tumu (Yönetici ve Gider Listesi'nde ortak)
+
+const DONEM_ADLARI = { bugun: 'Bugün', hafta: 'Bu Hafta', ay: 'Bu Ay', tumu: 'Tümü' };
+
+// Yüzde değişimin yazısı ve önceki dönemde hiç tahsilat yoksa gösterilecek yazı
+const KARSILASTIRMA_YAZILARI = {
+  bugun: ['düne göre', 'Dün tahsilat yoktu'],
+  hafta: ['geçen haftaya göre', 'Geçen hafta bu zamana kadar tahsilat yoktu'],
+  ay: ['geçen aya göre', 'Geçen ay bu zamana kadar tahsilat yoktu']
+};
+
+// Seçilen dönemin başlangıç ve bitiş tarihleri. "Tümü" için [null, null].
+function donemAraligi(donem) {
+  const simdi = new Date();
+  const yil = simdi.getFullYear();
+  const ay = simdi.getMonth();
+
+  if (donem === 'bugun') {
+    return [bugun(), bugun()];
+  }
+  if (donem === 'hafta') {
+    const pazartesiden = (simdi.getDay() + 6) % 7; // Pazartesi = 0, Pazar = 6
+    return [tarihMetni(gunEkle(simdi, -pazartesiden)), tarihMetni(gunEkle(simdi, 6 - pazartesiden))];
+  }
+  if (donem === 'ay') {
+    return [tarihMetni(new Date(yil, ay, 1)), tarihMetni(new Date(yil, ay + 1, 0))];
+  }
+  return [null, null];
+}
+
+// Yüzde karşılaştırması için önceki dönemin AYNI SÜREDEKİ kısmı ("Tümü" için null):
+//   Bugün    -> dün
+//   Bu Hafta -> geçen haftanın pazartesisinden geçen haftanın bugünkü gününe
+//   Bu Ay    -> geçen ayın 1'inden geçen ayın bugünkü gününe (o ay kısaysa ayın son günü)
+// Böylece yarım kalan hafta/ay, geçen haftanın/ayın tamamıyla karşılaştırılıp
+// hep "düşüş" gibi görünmez.
+function oncekiAralik(donem) {
+  const simdi = new Date();
+  if (donem === 'bugun') {
+    const dun = tarihMetni(gunEkle(simdi, -1));
+    return [dun, dun];
+  }
+  if (donem === 'hafta') {
+    const pazartesiden = (simdi.getDay() + 6) % 7;
+    return [tarihMetni(gunEkle(simdi, -pazartesiden - 7)), tarihMetni(gunEkle(simdi, -7))];
+  }
+  if (donem === 'ay') {
+    const yil = simdi.getFullYear();
+    const ay = simdi.getMonth();
+    const gecenAyinSonGunu = new Date(yil, ay, 0).getDate();
+    return [tarihMetni(new Date(yil, ay - 1, 1)),
+      tarihMetni(new Date(yil, ay - 1, Math.min(simdi.getDate(), gecenAyinSonGunu)))];
+  }
+  return null;
+}
+
+// "14 Ekim 2026" veya "12 Ekim 2026 – 18 Ekim 2026" veya "Tüm kayıtlar"
+function aralikYazisi(bas, bit) {
+  if (!bas) return 'Tüm kayıtlar';
+  return bas === bit ? tarihYaz(bas) : `${tarihYaz(bas)} – ${tarihYaz(bit)}`;
+}
+
+// Raporlar için gereken tüm veriyi bir kerede alır
+async function raporVerisiGetir() {
+  const [siparisler, giderler, musteriler] =
+    await Promise.all([siparisleriGetir(), giderleriGetir(), musterileriGetir()]);
+  return { siparisler, giderler, musteriler };
+}
+
+// İki tarih arasının (bas/bit null ise sınırsız) rakamlarını hesaplar.
+//   Tahsilat : ödeme tarihi bu aralıkta olanlar (kasaya/bankaya giren para), yönteme göre
+//   Gider    : gider tarihi bu aralıkta olanlar, türe göre
+//   Ciro     : sipariş tarihi bu aralıkta olan siparişlerin toplamı
+//   Net (iş) : ciro − gider
+//   Kasa     : NAKİT tahsilat − gider (kart ve havale kasaya girmez)
+// Yöntemi/türü bilinmeyen eski kayıtlar "belirsiz" olarak ayrı toplanır.
+function donemRaporu(veri, bas, bit) {
+  const aralikta = tarih => !!tarih && (!bas || tarih >= bas) && (!bit || tarih <= bit);
+  const toplam = liste => yuvarla(liste.reduce((t, x) => t + (Number(x.tutar) || 0), 0));
+  const turlereGore = (liste, alan, turler) => {
+    const sonuc = {};
+    turler.forEach(tur => { sonuc[tur] = toplam(liste.filter(x => x[alan] === tur)); });
+    sonuc.belirsiz = toplam(liste.filter(x => !turler.includes(x[alan])));
+    return sonuc;
+  };
+
+  const siparisler = veri.siparisler.filter(s => aralikta(s.tarih));
+  const odenenler = veri.siparisler.filter(s => s.odemeAlindi && aralikta(s.odemeTarihi));
+  const giderler = veri.giderler.filter(g => aralikta(g.tarih));
+
+  const ciro = toplam(siparisler);
+  const tahsilat = toplam(odenenler);
+  const gelir = turlereGore(odenenler, 'odemeYontemi', ODEME_YONTEMLERI);
+  const gider = toplam(giderler);
+
+  return {
+    tahsilat: tahsilat,
+    gelir: gelir,                                          // { Nakit, Kart, Havale, belirsiz }
+    gider: gider,
+    giderTurleri: turlereGore(giderler, 'tur', GIDER_TURLERI), // { Yakıt, Malzeme, Diğer, belirsiz }
+    yeniMusteri: veri.musteriler.filter(m => aralikta(tarihMetni(new Date(m.olusturma)))).length,
+    siparisSayisi: siparisler.length,
+    metrekare: yuvarla(siparisler.reduce((t, s) => t + (Number(s.metrekare) || 0), 0)),
+    parca: siparisler.reduce((t, s) => t + (Number(s.parcaSayisi) || 0), 0),
+    ciro: ciro,
+    net: yuvarla(ciro - gider),
+    kasa: yuvarla(gelir.Nakit - gider),
+    odenmemis: toplam(siparisler.filter(s => !s.odemeAlindi))
+  };
+}
+
+// Tahsilatın önceki döneme göre değişimi: "▲ %12 düne göre" (yeşil/kırmızı/gri)
+function degisimHTML(donem, veri, buDonemTahsilat) {
+  const onceki = oncekiAralik(donem);
+  if (!onceki) return ''; // "Tümü" için karşılaştırma yok
+  const [etiket, yokYazisi] = KARSILASTIRMA_YAZILARI[donem];
+  const oncekiTahsilat = donemRaporu(veri, onceki[0], onceki[1]).tahsilat;
+
+  if (oncekiTahsilat === 0) return `<div class="degisim ayni">${yokYazisi}</div>`;
+  const yuzde = Math.round((buDonemTahsilat - oncekiTahsilat) / oncekiTahsilat * 100);
+  if (yuzde > 0) return `<div class="degisim artis">▲ %${yuzde} ${etiket}</div>`;
+  if (yuzde < 0) return `<div class="degisim dusus">▼ %${-yuzde} ${etiket}</div>`;
+  return `<div class="degisim ayni">■ %0 ${etiket}</div>`;
+}
+
+// Üçlü küçük kutular: Nakit/Kart/Havale veya Yakıt/Malzeme/Diğer
+function ucluKutuHTML(adlar, tutarlar) {
+  return `<div class="uclu">${adlar.map(ad => `
+    <div class="mini-kutu">
+      <div class="mini-baslik">${ad}</div>
+      <div class="mini-deger">${paraKisa(tutarlar[ad])}</div>
+    </div>`).join('')}</div>`;
+}
+
+// Bir dönemin kartını ve altındaki Ciro/Net/Kasa/Ödenmemiş kutularını çizer
+// (Yönetici ekranı ve Gün Özeti ekranı ortak kullanır)
+function donemCiz(donem, veri, kartId, finansId) {
+  const [bas, bit] = donemAraligi(donem);
+  const r = donemRaporu(veri, bas, bit);
+  const belirsizNotu = (tutar, yazi) => tutar > 0 ? `<p class="kucuk-not">${yazi}: ${paraKisa(tutar)}</p>` : '';
+
+  document.getElementById(kartId).innerHTML = `
+    <div class="donem-karti">
+      <div class="donem-ust">
+        <span class="donem-adi">${DONEM_ADLARI[donem]}</span>
+        <span class="donem-tarih">${aralikYazisi(bas, bit)}</span>
+      </div>
+      <div class="tahsilat-satiri">
+        <span class="tahsilat-etiket">Tahsilat</span>
+        <span class="tahsilat-tutar">${paraKisa(r.tahsilat)}</span>
+      </div>
+      ${degisimHTML(donem, veri, r.tahsilat)}
+
+      <div class="kart-bolum-baslik gelir"><span>Gelir</span></div>
+      ${ucluKutuHTML(ODEME_YONTEMLERI, r.gelir)}
+      ${belirsizNotu(r.gelir.belirsiz, 'Yöntemi belirtilmemiş ödemeler')}
+
+      <div class="kart-bolum-baslik gider"><span>Gider</span><span>${paraKisa(r.gider)}</span></div>
+      ${ucluKutuHTML(GIDER_TURLERI, r.giderTurleri)}
+      ${belirsizNotu(r.giderTurleri.belirsiz, 'Türü belirtilmemiş giderler')}
+
+      <div class="gostergeler">
+        <div class="gosterge"><div class="gosterge-deger">+${r.yeniMusteri}</div><div class="gosterge-ad">Yeni müşteri</div></div>
+        <div class="gosterge"><div class="gosterge-deger">${r.siparisSayisi}</div><div class="gosterge-ad">Sipariş</div></div>
+        <div class="gosterge"><div class="gosterge-deger">${sayiYaz(r.metrekare)}</div><div class="gosterge-ad">m²</div></div>
+        <div class="gosterge"><div class="gosterge-deger">${r.parca}</div><div class="gosterge-ad">Parça</div></div>
+      </div>
+    </div>`;
+
+  const kutu = (baslik, deger, not, sinif = '') => `
+    <div class="ozet-kutu ${sinif}">
+      <div class="ozet-baslik">${baslik}</div>
+      <div class="ozet-deger">${paraKisa(deger)}</div>
+      <div class="ozet-not">${not}</div>
+    </div>`;
+  document.getElementById(finansId).innerHTML =
+    kutu('Ciro', r.ciro, 'sipariş tarihine göre') +
+    kutu('Net (iş)', r.net, 'ciro − gider', r.net < 0 ? 'olumsuz' : '') +
+    kutu('Kasa', r.kasa, 'nakit tahsilat − gider', r.kasa < 0 ? 'olumsuz' : 'olumlu') +
+    kutu('Ödenmemiş', r.odenmemis, 'alınacak para');
+}
+
+// Dönem butonlarında (Bugün / Bu Hafta / ...) seçili olanı işaretler
+function donemButonlariniIsaretle() {
+  document.querySelectorAll('.donem-secici button').forEach(b =>
+    b.classList.toggle('secili', b.dataset.donem === secilenDonem));
+}
+
+// Dönem butonuna basınca dönemi değiştir ve bulunulan ekranı yeniden çiz
+document.querySelectorAll('.donem-secici').forEach(grup =>
+  grup.addEventListener('click', olay => {
+    const buton = olay.target.closest('button[data-donem]');
+    if (!buton) return;
+    secilenDonem = buton.dataset.donem;
+    sayfayiCiz();
+  }));
+
+
+/* ===================== 5. EKRANLAR ARASI GEÇİŞ VE ALT MENÜ =====================
    Hangi ekranın görüneceğini adresin # kısmı belirler:
      #/                          -> Ana Ekran
      #/durum/2                   -> 3. durumdaki ("Yıkamada") siparişler
@@ -335,6 +564,7 @@ document.querySelectorAll('.siparis-satirlari').forEach(liste =>
      #/musteri-formu[/ID]        -> yeni müşteri / müşteri düzenle
      #/siparis-formu/MUSTERIID[/SIPARISID] -> yeni sipariş / sipariş düzenle
      #/yonetici                  -> Yönetici
+     #/giderler                  -> Gider Listesi
      #/ayarlar                   -> Ayarlar
    Sayfa hiç yenilenmez; telefonun "geri" tuşu da doğal çalışır.
    ================================================================================ */
@@ -426,6 +656,8 @@ async function adreseGoreCiz() {
     await siparisFormunuCiz(parcalar[1], parcalar[2]);
   } else if (sayfa === 'yonetici') {
     await yoneticiCiz();
+  } else if (sayfa === 'giderler') {
+    await giderListesiniCiz();
   } else if (sayfa === 'ayarlar') {
     await ayarlariCiz();
   } else {
@@ -448,7 +680,7 @@ document.getElementById('alt-menu').addEventListener('click', olay => {
 });
 
 
-/* ===================== 5. ANA EKRAN ===================== */
+/* ===================== 6. ANA EKRAN ===================== */
 
 async function anaEkraniCiz() {
   const cizim = cizimBaslat();
@@ -511,7 +743,7 @@ document.getElementById('simdi-yedekle-butonu').addEventListener('click', olay =
   }));
 
 
-/* ===================== 6. DURUM LİSTESİ ===================== */
+/* ===================== 7. DURUM LİSTESİ ===================== */
 
 async function durumListesiniCiz(durumNo) {
   if (!(durumNo >= 0 && durumNo < DURUMLAR.length)) { yerineGit('/'); return; }
@@ -538,34 +770,33 @@ async function durumListesiniCiz(durumNo) {
 }
 
 
-/* ===================== 7. GÜN ÖZETİ ===================== */
+/* ===================== 8. GÜN ÖZETİ ===================== */
 
 async function gunOzetiniCiz() {
   const cizim = cizimBaslat();
-  const [tumSiparisler, giderler, tumMusteriler] =
-    await Promise.all([siparisleriGetir(), giderleriGetir(), musterileriGetir()]);
+  const veri = await raporVerisiGetir();
   if (cizimEskidi(cizim)) return;
 
   ekranGoster('ekran-gun-ozeti', 'Gün Özeti', '/', 'ana');
 
-  const bugunTarihi = bugun();
-  document.getElementById('gun-tarihi').textContent = tarihYaz(bugunTarihi);
-  document.getElementById('gun-ozeti-kartlari').innerHTML =
-    ozetKutulariHTML(ozetHesapla(tumSiparisler, giderler, bugunTarihi, bugunTarihi));
+  // Yönetici'deki "Bugün" kartının aynısı: iki ekran hep aynı rakamı gösterir
+  donemCiz('bugun', veri, 'gun-ozeti-karti', 'gun-ozeti-finans');
 
-  const siparisler = tumSiparisler
+  const bugunTarihi = bugun();
+  const siparisler = veri.siparisler
     .filter(s => s.tarih === bugunTarihi)
     .sort((a, b) => a.no - b.no);
-  const musteriler = musteriHaritasi(tumMusteriler);
+  const musteriler = musteriHaritasi(veri.musteriler);
   document.getElementById('gun-siparisleri').innerHTML =
     siparisler.map(s => siparisSatiriHTML(s, musteriler, false)).join('');
   document.getElementById('gun-bos').hidden = siparisler.length > 0;
 }
 
 
-/* ===================== 8. GİDER FORMU ===================== */
+/* ===================== 9. GİDER FORMU ===================== */
 
 const giderFormu = document.getElementById('gider-formu');
+secimGrubuDoldur('gider-turu-secenekleri', 'tur', GIDER_TURLERI);
 
 function giderFormunuCiz() {
   cizimBaslat(); // Bekleyen eski çizimler bu formun üstüne yazmasın
@@ -573,35 +804,37 @@ function giderFormunuCiz() {
   giderFormu.tarih.value = bugun();
   giderFormu.tutar.value = '';
   giderFormu.aciklama.value = '';
+  secimYap(giderFormu, 'tur', null); // Tür bilerek seçili GELMEZ; kullanıcı seçmeli
+  alanHatalariniTemizle(giderFormu);
 }
 
 giderFormu.addEventListener('submit', olay => {
   olay.preventDefault();
   islemSirasinda(giderFormu.querySelector('[type="submit"]'), async () => {
+    alanHatalariniTemizle(giderFormu);
     const tutar = sayiOku(giderFormu.tutar.value);
-    if (tutar === null || tutar <= 0) {
-      alert('Lütfen geçerli bir tutar girin (örn: 450 veya 99,90).');
-      return;
-    }
-    if (!giderFormu.tarih.value) {
-      alert('Lütfen tarih seçin.');
-      return;
-    }
+    const tur = giderFormu.tur.value;
+
+    if (!giderFormu.tarih.value) alanHatasiGoster(giderFormu, 'tarih', 'Tarih seçin.');
+    if (tutar === null || tutar <= 0) alanHatasiGoster(giderFormu, 'tutar', 'Geçerli bir tutar yazın (örn: 450 veya 99,90).');
+    if (!GIDER_TURLERI.includes(tur)) alanHatasiGoster(giderFormu, 'tur', 'Gider türünü seçin: Yakıt, Malzeme veya Diğer.');
+    if (formdaHataVar(giderFormu)) return;
 
     const gider = await veriIslemi(() => giderEkle({
       tarih: giderFormu.tarih.value,
       tutar: yuvarla(tutar),
-      aciklama: giderFormu.aciklama.value.trim() || 'Gider'
+      tur: tur,
+      aciklama: giderFormu.aciklama.value.trim()
     }));
     if (!gider) return; // Uyarı gösterildi; form olduğu gibi kalır
 
-    bildirimGoster('Gider eklendi: ' + paraYaz(tutar));
+    bildirimGoster(`Gider eklendi: ${tur} ${paraYaz(tutar)}`);
     geriGit('/');
   });
 });
 
 
-/* ===================== 9. SİPARİŞ BUL ===================== */
+/* ===================== 10. SİPARİŞ BUL ===================== */
 
 const siparisBulFormu = document.getElementById('siparis-bul-formu');
 
@@ -629,7 +862,7 @@ siparisBulFormu.addEventListener('submit', olay => {
 });
 
 
-/* ===================== 10. MÜŞTERİLER ===================== */
+/* ===================== 11. MÜŞTERİLER ===================== */
 
 async function musteriListesiniCiz() {
   const cizim = cizimBaslat();
@@ -684,9 +917,31 @@ document.getElementById('musteri-listesi').addEventListener('click', olay => {
 });
 
 
-/* ===================== 11. MÜŞTERİ DETAYI ===================== */
+/* ===================== 12. MÜŞTERİ DETAYI ===================== */
 
 let aktifMusteriId = null;
+
+// Sipariş kartındaki ödeme bölümü:
+//   ödenmemişse -> "Ödeme al:" [Nakit] [Kart] [Havale]  (yöntem seçmeden ödeme kaydedilemez)
+//   ödenmişse   -> "✓ Nakit · 15 Ekim 2026"  [Geri al]
+function odemeBolumuHTML(s) {
+  const id = guvenli(s.id);
+  if (s.odemeAlindi) {
+    const yontem = s.odemeYontemi || 'Ödeme alındı (yöntem belirtilmemiş)';
+    return `
+      <div class="odeme-durumu">
+        <span>✓ ${yontem} · ${tarihYaz(s.odemeTarihi)}</span>
+        <button class="buton buton-kucuk buton-gri" data-islem="odeme-geri" data-id="${id}">Geri al</button>
+      </div>`;
+  }
+  return `
+    <div class="odeme-al">
+      <span class="odeme-al-baslik">Ödeme al:</span>
+      <div class="uclu">${ODEME_YONTEMLERI.map(y =>
+        `<button class="buton buton-kucuk" data-islem="ode" data-yontem="${y}" data-id="${id}">${y}</button>`).join('')}
+      </div>
+    </div>`;
+}
 
 // vurguSiparisId verilirse o sipariş kartı çerçeveli gösterilir ve ekran ona kaydırılır
 async function musteriDetayiniCiz(musteriId, vurguSiparisId) {
@@ -703,6 +958,8 @@ async function musteriDetayiniCiz(musteriId, vurguSiparisId) {
   telefon.textContent = musteri.telefon;
   telefon.href = 'tel:' + musteri.telefon.replace(/[^\d+]/g, ''); // Basınca arama açılır
   document.getElementById('detay-adres').textContent = musteri.adres || '';
+  document.getElementById('detay-kayit').textContent =
+    'Kayıt: ' + tarihYaz(tarihMetni(new Date(musteri.olusturma)));
 
   // Siparişler: en yeni tarih en üstte
   const siparisler = tumSiparisler.sort((a, b) =>
@@ -711,8 +968,6 @@ async function musteriDetayiniCiz(musteriId, vurguSiparisId) {
   document.getElementById('siparis-listesi').innerHTML = siparisler.map(s => {
     const secenekler = DURUMLAR.map(d =>
       `<option value="${d}" ${d === s.durum ? 'selected' : ''}>${d}</option>`).join('');
-    const odemeSinifi = s.odemeAlindi ? 'odendi' : 'odenmedi';
-    const odemeYazisi = s.odemeAlindi ? `✓ Ödeme alındı · ${tarihYaz(s.odemeTarihi)}` : '✗ Ödeme alınmadı';
     const teslim = s.teslimTarihi ? ` · Teslim: ${tarihYaz(s.teslimTarihi)}` : '';
     const vurgu = s.id === vurguSiparisId ? 'vurgulu' : '';
     return `
@@ -721,9 +976,9 @@ async function musteriDetayiniCiz(musteriId, vurguSiparisId) {
           <span class="siparis-tarih"><span class="siparis-no">#${s.no}</span> ${tarihYaz(s.tarih)}</span>
           <span class="siparis-tutar">${paraYaz(s.tutar)}</span>
         </div>
-        <div class="siparis-detay">${sayiYaz(s.metrekare)} m² × ${paraYaz(s.birimFiyat)}${teslim}</div>
+        <div class="siparis-detay">${parcaVeMetrekare(s)} × ${paraYaz(s.birimFiyat)}${teslim}</div>
         <select data-islem="durum" data-id="${guvenli(s.id)}" aria-label="Sipariş durumu">${secenekler}</select>
-        <button class="buton buton-kucuk odeme-butonu ${odemeSinifi}" data-islem="odeme" data-id="${guvenli(s.id)}">${odemeYazisi}</button>
+        ${odemeBolumuHTML(s)}
         <div class="buton-satiri">
           <button class="buton buton-kucuk" data-islem="duzenle" data-id="${guvenli(s.id)}">Düzenle</button>
           <button class="buton buton-kucuk buton-tehlike" data-islem="sil" data-id="${guvenli(s.id)}">Sil</button>
@@ -755,8 +1010,19 @@ document.getElementById('siparis-listesi').addEventListener('click', olay => {
   if (!buton) return;
   const siparisId = buton.dataset.id;
 
-  if (buton.dataset.islem === 'odeme') {
-    islemSirasinda(buton, () => siparisiGuncelleVeCiz(siparisId, s => odemeAyarla(s, !s.odemeAlindi)));
+  if (buton.dataset.islem === 'ode') {
+    // Ödeme, seçilen yöntemle (Nakit/Kart/Havale) birlikte kaydedilir
+    const yontem = buton.dataset.yontem;
+    islemSirasinda(buton, async () => {
+      const siparis = await siparisiGuncelleVeCiz(siparisId, s => odemeAyarla(s, true, yontem));
+      if (siparis) bildirimGoster(`#${siparis.no} ödendi: ${yontem}`);
+    });
+  } else if (buton.dataset.islem === 'odeme-geri') {
+    if (!confirm('Bu siparişin ödeme kaydı geri alınsın mı? Tahsilattan düşer.')) return;
+    islemSirasinda(buton, async () => {
+      const siparis = await siparisiGuncelleVeCiz(siparisId, s => odemeAyarla(s, false));
+      if (siparis) bildirimGoster(`#${siparis.no} ödeme kaydı geri alındı`);
+    });
   } else if (buton.dataset.islem === 'duzenle') {
     git('/siparis-formu/' + aktifMusteriId + '/' + siparisId);
   } else if (buton.dataset.islem === 'sil') {
@@ -795,7 +1061,7 @@ document.getElementById('musteri-sil-butonu').addEventListener('click', olay =>
   }));
 
 
-/* ===================== 12. MÜŞTERİ FORMU ===================== */
+/* ===================== 13. MÜŞTERİ FORMU ===================== */
 
 const musteriFormu = document.getElementById('musteri-formu');
 let duzenlenenMusteriId = null; // null ise yeni müşteri ekleniyor
@@ -816,21 +1082,23 @@ async function musteriFormunuCiz(musteriId) {
   musteriFormu.soyad.value = musteri ? musteri.soyad : '';
   musteriFormu.telefon.value = musteri ? musteri.telefon : '';
   musteriFormu.adres.value = musteri ? musteri.adres : '';
+  alanHatalariniTemizle(musteriFormu);
 }
 
 musteriFormu.addEventListener('submit', olay => {
   olay.preventDefault(); // Sayfanın yenilenmesini engelle
   islemSirasinda(musteriFormu.querySelector('[type="submit"]'), async () => {
+    alanHatalariniTemizle(musteriFormu);
     const bilgiler = {
       ad: musteriFormu.ad.value.trim(),
       soyad: musteriFormu.soyad.value.trim(),
       telefon: musteriFormu.telefon.value.trim(),
       adres: musteriFormu.adres.value.trim()
     };
-    if (!bilgiler.ad || !bilgiler.soyad || !bilgiler.telefon) {
-      alert('Ad, soyad ve telefon zorunludur.');
-      return;
-    }
+    if (!bilgiler.ad) alanHatasiGoster(musteriFormu, 'ad', 'Adı yazın.');
+    if (!bilgiler.soyad) alanHatasiGoster(musteriFormu, 'soyad', 'Soyadı yazın.');
+    if (!bilgiler.telefon) alanHatasiGoster(musteriFormu, 'telefon', 'Telefon numarasını yazın.');
+    if (formdaHataVar(musteriFormu)) return;
 
     // Kaydedilemezse uyarı gösterilir ve return ile durulur: form olduğu gibi kalır
     if (duzenlenenMusteriId) {
@@ -849,15 +1117,24 @@ musteriFormu.addEventListener('submit', olay => {
 });
 
 
-/* ===================== 13. SİPARİŞ FORMU ===================== */
+/* ===================== 14. SİPARİŞ FORMU ===================== */
 
 const siparisFormu = document.getElementById('siparis-formu');
 let formMusteriId = null;
 let duzenlenenSiparisId = null; // null ise yeni sipariş ekleniyor
 let formBirimFiyat = 0;         // Bu siparişte kullanılacak birim fiyat
 
-// Durum seçeneklerini bir kez doldur
+// Durum seçeneklerini ve ödeme yöntemi butonlarını bir kez doldur
 siparisFormu.durum.innerHTML = DURUMLAR.map(d => `<option value="${d}">${d}</option>`).join('');
+secimGrubuDoldur('odeme-yontemi-secenekleri', 'odemeYontemi', ODEME_YONTEMLERI);
+
+// "Ödeme alındı" işaretliyse ödeme yöntemi seçimi görünür
+function odemeYontemiAlaniniGuncelle() {
+  const goster = siparisFormu.odemeAlindi.checked;
+  document.getElementById('odeme-yontemi-alani').hidden = !goster;
+  if (!goster) alanHatalariniTemizle(siparisFormu, 'odemeYontemi');
+}
+siparisFormu.odemeAlindi.addEventListener('change', odemeYontemiAlaniniGuncelle);
 
 async function siparisFormunuCiz(musteriId, siparisId) {
   const cizim = cizimBaslat();
@@ -882,8 +1159,13 @@ async function siparisFormunuCiz(musteriId, siparisId) {
   document.getElementById('siparis-formu-musteri').textContent = musteri.ad + ' ' + musteri.soyad;
   siparisFormu.tarih.value = siparis ? siparis.tarih : bugun();
   siparisFormu.metrekare.value = siparis ? String(siparis.metrekare).replace('.', ',') : '';
+  // Parça sayısı ve ödeme yöntemi bilerek boş gelir; kullanıcı girmek/seçmek zorunda
+  siparisFormu.parcaSayisi.value = siparis && siparis.parcaSayisi ? String(siparis.parcaSayisi) : '';
   siparisFormu.durum.value = siparis ? siparis.durum : DURUMLAR[0];
   siparisFormu.odemeAlindi.checked = siparis ? !!siparis.odemeAlindi : false;
+  secimYap(siparisFormu, 'odemeYontemi', siparis ? siparis.odemeYontemi : null);
+  odemeYontemiAlaniniGuncelle();
+  alanHatalariniTemizle(siparisFormu);
   document.getElementById('form-birim-fiyat').textContent = paraYaz(formBirimFiyat);
   toplamiGuncelle();
 }
@@ -900,34 +1182,47 @@ siparisFormu.metrekare.addEventListener('input', toplamiGuncelle);
 siparisFormu.addEventListener('submit', olay => {
   olay.preventDefault();
   islemSirasinda(siparisFormu.querySelector('[type="submit"]'), async () => {
+    alanHatalariniTemizle(siparisFormu);
     const metrekare = sayiOku(siparisFormu.metrekare.value);
+    const parcaSayisi = tamSayiOku(siparisFormu.parcaSayisi.value);
+    const odemeAlindi = siparisFormu.odemeAlindi.checked;
+    const odemeYontemi = siparisFormu.odemeYontemi.value;
+
+    // Eksik/hatalı her alanın altında uyarı çıkar
+    if (!siparisFormu.tarih.value) alanHatasiGoster(siparisFormu, 'tarih', 'Tarih seçin.');
     if (metrekare === null || metrekare <= 0) {
-      alert('Lütfen geçerli bir metrekare girin (örn: 6,5).');
-      return;
+      alanHatasiGoster(siparisFormu, 'metrekare', 'Geçerli bir metrekare yazın (örn: 6,5).');
     }
-    if (!siparisFormu.tarih.value) {
-      alert('Lütfen tarih seçin.');
-      return;
+    if (!parcaSayisi || parcaSayisi < 1) {
+      alanHatasiGoster(siparisFormu, 'parcaSayisi', 'Parça sayısını yazın (kaç halı?).');
     }
+    if (odemeAlindi && !ODEME_YONTEMLERI.includes(odemeYontemi)) {
+      alanHatasiGoster(siparisFormu, 'odemeYontemi', 'Ödeme yöntemini seçin: Nakit, Kart veya Havale.');
+    }
+    if (formdaHataVar(siparisFormu)) return;
 
     // Formdaki bilgileri siparişe işler (yeni siparişte de, düzenlemede de aynı)
     const formuIsle = s => {
       Object.assign(s, {
         tarih: siparisFormu.tarih.value,
         metrekare: metrekare,
+        parcaSayisi: parcaSayisi,
         birimFiyat: formBirimFiyat,
         tutar: yuvarla(metrekare * formBirimFiyat)
       });
       // Teslim ve ödeme tarihleri bu fonksiyonlarda ayarlanır
       durumAyarla(s, siparisFormu.durum.value);
-      odemeAyarla(s, siparisFormu.odemeAlindi.checked);
+      odemeAyarla(s, odemeAlindi, odemeYontemi);
     };
 
     let siparis;
     if (duzenlenenSiparisId) {
       siparis = await veriIslemi(() => siparisGuncelle(duzenlenenSiparisId, formuIsle));
     } else {
-      const taslak = { musteriId: formMusteriId, durum: null, odemeAlindi: false, odemeTarihi: null, teslimTarihi: null };
+      const taslak = {
+        musteriId: formMusteriId, durum: null,
+        odemeAlindi: false, odemeTarihi: null, odemeYontemi: null, teslimTarihi: null
+      };
       formuIsle(taslak);
       siparis = await veriIslemi(() => siparisEkle(taslak)); // id, no ve zaman bilgilerini veri.js verir
     }
@@ -939,57 +1234,47 @@ siparisFormu.addEventListener('submit', olay => {
 });
 
 
-/* ===================== 14. YÖNETİCİ ===================== */
-
-let secilenDonem = 'bugun'; // bugun | hafta | ay | tumu
-
-// Seçilen dönemin başlangıç ve bitiş tarihleri. "Tümü" için [null, null].
-function donemAraligi(donem) {
-  const simdi = new Date();
-  const yil = simdi.getFullYear();
-  const ay = simdi.getMonth();
-
-  if (donem === 'bugun') {
-    return [bugun(), bugun()];
-  }
-  if (donem === 'hafta') {
-    const pazartesiden = (simdi.getDay() + 6) % 7; // Pazartesi = 0, Pazar = 6
-    const pazartesi = new Date(yil, ay, simdi.getDate() - pazartesiden);
-    const pazar = new Date(yil, ay, simdi.getDate() - pazartesiden + 6);
-    return [tarihMetni(pazartesi), tarihMetni(pazar)];
-  }
-  if (donem === 'ay') {
-    return [tarihMetni(new Date(yil, ay, 1)), tarihMetni(new Date(yil, ay + 1, 0))];
-  }
-  return [null, null];
-}
+/* ===================== 15. YÖNETİCİ VE GİDER LİSTESİ ===================== */
 
 async function yoneticiCiz() {
   const cizim = cizimBaslat();
-  const [siparisler, tumGiderler] = await Promise.all([siparisleriGetir(), giderleriGetir()]);
+  const veri = await raporVerisiGetir();
   if (cizimEskidi(cizim)) return;
 
   ekranGoster('ekran-yonetici', 'Yönetici', null, 'yonetici');
+  donemButonlariniIsaretle();
+  donemCiz(secilenDonem, veri, 'yonetici-karti', 'yonetici-finans');
+}
 
-  document.querySelectorAll('#donem-secici button').forEach(b =>
-    b.classList.toggle('secili', b.dataset.donem === secilenDonem));
+document.getElementById('ayarlara-git').addEventListener('click', () => git('/ayarlar'));
+document.getElementById('gider-listesine-git').addEventListener('click', () => git('/giderler'));
+
+async function giderListesiniCiz() {
+  const cizim = cizimBaslat();
+  const tumGiderler = await giderleriGetir();
+  if (cizimEskidi(cizim)) return;
+
+  ekranGoster('ekran-giderler', 'Gider Listesi', '/yonetici', 'yonetici');
+  donemButonlariniIsaretle();
 
   const [bas, bit] = donemAraligi(secilenDonem);
-  document.getElementById('donem-araligi').textContent =
-    !bas ? 'Tüm kayıtlar' : bas === bit ? tarihYaz(bas) : `${tarihYaz(bas)} – ${tarihYaz(bit)}`;
-  document.getElementById('yonetici-kartlari').innerHTML =
-    ozetKutulariHTML(ozetHesapla(siparisler, tumGiderler, bas, bit));
+  document.getElementById('giderler-araligi').textContent = `${DONEM_ADLARI[secilenDonem]} · ${aralikYazisi(bas, bit)}`;
 
   // Bu dönemin giderleri, en yenisi üstte
   const giderler = tumGiderler
     .filter(g => (!bas || g.tarih >= bas) && (!bit || g.tarih <= bit))
     .sort((a, b) => b.tarih.localeCompare(a.tarih) || (b.olusturma || 0) - (a.olusturma || 0));
 
+  const toplam = yuvarla(giderler.reduce((t, g) => t + (Number(g.tutar) || 0), 0));
+  document.getElementById('giderler-toplam').textContent = paraYaz(toplam);
+
   document.getElementById('gider-listesi').innerHTML = giderler.map(g => `
     <li class="gider-satiri">
       <div class="gider-bilgi">
-        <div class="gider-aciklama">${guvenli(g.aciklama)}</div>
-        <div class="musteri-alt">${tarihYaz(g.tarih)}</div>
+        <div class="gider-aciklama">${guvenli(g.aciklama || g.tur || 'Gider')}</div>
+        <div class="musteri-alt">
+          <span class="etiket tur-etiketi">${g.tur || 'Türü belirtilmemiş'}</span> ${tarihYaz(g.tarih)}
+        </div>
       </div>
       <span class="gider-tutar">${paraYaz(g.tutar)}</span>
       <button class="buton buton-kucuk buton-tehlike" data-id="${guvenli(g.id)}">Sil</button>
@@ -997,12 +1282,7 @@ async function yoneticiCiz() {
   document.getElementById('gider-yok').hidden = giderler.length > 0;
 }
 
-document.getElementById('donem-secici').addEventListener('click', olay => {
-  const buton = olay.target.closest('button[data-donem]');
-  if (!buton) return;
-  secilenDonem = buton.dataset.donem;
-  yoneticiCiz();
-});
+document.getElementById('gider-listesinden-ekle').addEventListener('click', () => git('/gider-formu'));
 
 document.getElementById('gider-listesi').addEventListener('click', olay => {
   const buton = olay.target.closest('button[data-id]');
@@ -1010,19 +1290,17 @@ document.getElementById('gider-listesi').addEventListener('click', olay => {
   islemSirasinda(buton, async () => {
     const gider = (await giderleriGetir()).find(g => g.id === buton.dataset.id);
     if (!gider) return;
-    if (!confirm(`"${gider.aciklama}" (${paraYaz(gider.tutar)}) gideri silinsin mi?`)) return;
+    const ad = gider.aciklama || gider.tur || 'Gider';
+    if (!confirm(`"${ad}" (${paraYaz(gider.tutar)}) gideri silinsin mi?`)) return;
     if (await veriIslemi(() => giderSil(gider.id), SILME_HATASI)) {
-      await yoneticiCiz();
+      await sayfayiCiz();
       bildirimGoster('Gider silindi');
     }
   });
 });
 
-document.getElementById('yonetici-gider-ekle').addEventListener('click', () => git('/gider-formu'));
-document.getElementById('ayarlara-git').addEventListener('click', () => git('/ayarlar'));
 
-
-/* ===================== 15. AYARLAR VE YEDEKLEME ===================== */
+/* ===================== 16. AYARLAR VE YEDEKLEME ===================== */
 
 const ayarlarFormu = document.getElementById('ayarlar-formu');
 
@@ -1033,15 +1311,18 @@ async function ayarlariCiz() {
 
   ekranGoster('ekran-ayarlar', 'Ayarlar', '/yonetici', 'yonetici');
   ayarlarFormu.birimFiyat.value = String(ayarlar.birimFiyat).replace('.', ',');
+  alanHatalariniTemizle(ayarlarFormu);
   surumuGoster();
 }
 
 ayarlarFormu.addEventListener('submit', olay => {
   olay.preventDefault();
   islemSirasinda(ayarlarFormu.querySelector('[type="submit"]'), async () => {
+    alanHatalariniTemizle(ayarlarFormu);
     const fiyat = sayiOku(ayarlarFormu.birimFiyat.value);
     if (fiyat === null || fiyat <= 0) {
-      alert('Lütfen geçerli bir fiyat girin (örn: 100 veya 112,50).');
+      alanHatasiGoster(ayarlarFormu, 'birimFiyat', 'Geçerli bir fiyat yazın (örn: 100 veya 112,50).');
+      formdaHataVar(ayarlarFormu);
       return;
     }
     if (await veriIslemi(() => birimFiyatKaydet(yuvarla(fiyat)))) {
@@ -1129,7 +1410,7 @@ function surumuGoster() {
 }
 
 
-/* ===================== 16. SERVICE WORKER =====================
+/* ===================== 17. SERVICE WORKER =====================
    Service worker uygulamanın internetsiz çalışmasını sağlar.
    Yeni sürüm yüklendiğinde sayfa otomatik yenilenir.
    ============================================================= */
