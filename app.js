@@ -139,7 +139,9 @@ function sadeceRakam(metin) {
   return String(metin || '').replace(/\D/g, '');
 }
 
-// Kullanıcının yazdığı metni HTML içine güvenle koymak için
+// GÜVENLİK: Ekrana HTML olarak (innerHTML ile) basılan her veri bu fonksiyondan geçer.
+// <, >, ", ' ve & karakterlerini zararsız hale getirir; böylece bir kayıttaki
+// (örn. dışarıdan gelen bir yedek dosyasındaki) yazı asla kod olarak çalışmaz.
 function guvenli(metin) {
   return String(metin == null ? '' : metin)
     .replace(/&/g, '&amp;')
@@ -150,8 +152,9 @@ function guvenli(metin) {
 }
 
 // "Teslim Alındı" -> "durum-teslim-alindi" (CSS sınıfı için)
+// Sadece a-z, 0-9 ve "-" kalır; bozuk bir durum değeri HTML etiketinin dışına taşamaz.
 function durumSinifi(durum) {
-  return 'durum-' + sadeMetin(durum).replace(/ /g, '-');
+  return 'durum-' + sadeMetin(durum).replace(/[^a-z0-9]+/g, '-');
 }
 
 function teslimEdilmediMi(siparis) {
@@ -240,8 +243,8 @@ document.querySelectorAll('form').forEach(form => {
 function secimGrubuDoldur(kapsayiciId, ad, secenekler) {
   document.getElementById(kapsayiciId).innerHTML = secenekler.map(secenek => `
     <label class="secim">
-      <input type="radio" name="${ad}" value="${secenek}">
-      <span>${secenek}</span>
+      <input type="radio" name="${guvenli(ad)}" value="${guvenli(secenek)}">
+      <span>${guvenli(secenek)}</span>
     </label>`).join('');
 }
 
@@ -299,7 +302,7 @@ function durumdakiSiparisler(siparisler, durumNo) {
 
 // "3 parça · 6,5 m²" (parça sayısı bilinmiyorsa sadece m²)
 function parcaVeMetrekare(s) {
-  const parca = s.parcaSayisi ? `${s.parcaSayisi} parça · ` : '';
+  const parca = s.parcaSayisi ? `${guvenli(s.parcaSayisi)} parça · ` : '';
   return `${parca}${sayiYaz(s.metrekare)} m²`;
 }
 
@@ -310,15 +313,15 @@ function siparisSatiriHTML(s, musteriler, ileriButonuVar) {
   const musteri = musteriler.get(s.musteriId);
   const isim = musteri ? `${guvenli(musteri.ad)} ${guvenli(musteri.soyad)}` : '(silinmiş müşteri)';
   const odeme = s.odemeAlindi
-    ? `<span class="etiket odendi">${s.odemeYontemi || 'Ödendi'}</span>`
+    ? `<span class="etiket odendi">${guvenli(s.odemeYontemi || 'Ödendi')}</span>`
     : '<span class="etiket odenmedi">Ödenmedi</span>';
   const ileri = ileriButonuVar && sonrakiDurum(s.durum)
-    ? `<button class="buton buton-kucuk buton-ana ileri-butonu" data-islem="ileri" data-id="${guvenli(s.id)}">${SONRAKI_ADIM[s.durum]}</button>`
+    ? `<button class="buton buton-kucuk buton-ana ileri-butonu" data-islem="ileri" data-id="${guvenli(s.id)}">${guvenli(SONRAKI_ADIM[s.durum])}</button>`
     : '';
   return `
     <li class="siparis-satiri ${durumSinifi(s.durum)}">
       <button class="satir-icerik" data-islem="ac" data-id="${guvenli(s.id)}" data-musteri="${guvenli(s.musteriId)}">
-        <div class="satir-ust"><span class="siparis-no">#${s.no}</span> ${isim}</div>
+        <div class="satir-ust"><span class="siparis-no">#${guvenli(s.no)}</span> ${isim}</div>
         <div class="musteri-alt">${tarihYaz(s.tarih)} · ${parcaVeMetrekare(s)} · ${paraYaz(s.tutar)} ${odeme}</div>
       </button>
       ${ileri}
@@ -482,7 +485,7 @@ function degisimHTML(donem, veri, buDonemTahsilat) {
 function ucluKutuHTML(adlar, tutarlar) {
   return `<div class="uclu">${adlar.map(ad => `
     <div class="mini-kutu">
-      <div class="mini-baslik">${ad}</div>
+      <div class="mini-baslik">${guvenli(ad)}</div>
       <div class="mini-deger">${paraKisa(tutarlar[ad])}</div>
     </div>`).join('')}</div>`;
 }
@@ -497,8 +500,8 @@ function donemCiz(donem, veri, kartId, finansId) {
   document.getElementById(kartId).innerHTML = `
     <div class="donem-karti">
       <div class="donem-ust">
-        <span class="donem-adi">${DONEM_ADLARI[donem]}</span>
-        <span class="donem-tarih">${aralikYazisi(bas, bit)}</span>
+        <span class="donem-adi">${guvenli(DONEM_ADLARI[donem])}</span>
+        <span class="donem-tarih">${guvenli(aralikYazisi(bas, bit))}</span>
       </div>
       <div class="tahsilat-satiri">
         <span class="tahsilat-etiket">Tahsilat</span>
@@ -695,7 +698,7 @@ async function anaEkraniCiz() {
     return `
       <li class="${durumSinifi(durum)}">
         <button class="durum-satiri" data-durum="${sira}">
-          <span class="durum-adi">${durum}${not}</span>
+          <span class="durum-adi">${guvenli(durum)}${not}</span>
           <span class="durum-sayi">${sayi}</span>
           <span class="durum-ok">›</span>
         </button>
@@ -930,7 +933,7 @@ function odemeBolumuHTML(s) {
     const yontem = s.odemeYontemi || 'Ödeme alındı (yöntem belirtilmemiş)';
     return `
       <div class="odeme-durumu">
-        <span>✓ ${yontem} · ${tarihYaz(s.odemeTarihi)}</span>
+        <span>✓ ${guvenli(yontem)} · ${tarihYaz(s.odemeTarihi)}</span>
         <button class="buton buton-kucuk buton-gri" data-islem="odeme-geri" data-id="${id}">Geri al</button>
       </div>`;
   }
@@ -938,7 +941,7 @@ function odemeBolumuHTML(s) {
     <div class="odeme-al">
       <span class="odeme-al-baslik">Ödeme al:</span>
       <div class="uclu">${ODEME_YONTEMLERI.map(y =>
-        `<button class="buton buton-kucuk" data-islem="ode" data-yontem="${y}" data-id="${id}">${y}</button>`).join('')}
+        `<button class="buton buton-kucuk" data-islem="ode" data-yontem="${guvenli(y)}" data-id="${id}">${guvenli(y)}</button>`).join('')}
       </div>
     </div>`;
 }
@@ -967,13 +970,13 @@ async function musteriDetayiniCiz(musteriId, vurguSiparisId) {
 
   document.getElementById('siparis-listesi').innerHTML = siparisler.map(s => {
     const secenekler = DURUMLAR.map(d =>
-      `<option value="${d}" ${d === s.durum ? 'selected' : ''}>${d}</option>`).join('');
+      `<option value="${guvenli(d)}" ${d === s.durum ? 'selected' : ''}>${guvenli(d)}</option>`).join('');
     const teslim = s.teslimTarihi ? ` · Teslim: ${tarihYaz(s.teslimTarihi)}` : '';
     const vurgu = s.id === vurguSiparisId ? 'vurgulu' : '';
     return `
       <li class="siparis ${durumSinifi(s.durum)} ${vurgu}">
         <div class="siparis-ust">
-          <span class="siparis-tarih"><span class="siparis-no">#${s.no}</span> ${tarihYaz(s.tarih)}</span>
+          <span class="siparis-tarih"><span class="siparis-no">#${guvenli(s.no)}</span> ${tarihYaz(s.tarih)}</span>
           <span class="siparis-tutar">${paraYaz(s.tutar)}</span>
         </div>
         <div class="siparis-detay">${parcaVeMetrekare(s)} × ${paraYaz(s.birimFiyat)}${teslim}</div>
@@ -1125,7 +1128,7 @@ let duzenlenenSiparisId = null; // null ise yeni sipariş ekleniyor
 let formBirimFiyat = 0;         // Bu siparişte kullanılacak birim fiyat
 
 // Durum seçeneklerini ve ödeme yöntemi butonlarını bir kez doldur
-siparisFormu.durum.innerHTML = DURUMLAR.map(d => `<option value="${d}">${d}</option>`).join('');
+siparisFormu.durum.innerHTML = DURUMLAR.map(d => `<option value="${guvenli(d)}">${guvenli(d)}</option>`).join('');
 secimGrubuDoldur('odeme-yontemi-secenekleri', 'odemeYontemi', ODEME_YONTEMLERI);
 
 // "Ödeme alındı" işaretliyse ödeme yöntemi seçimi görünür
@@ -1273,7 +1276,7 @@ async function giderListesiniCiz() {
       <div class="gider-bilgi">
         <div class="gider-aciklama">${guvenli(g.aciklama || g.tur || 'Gider')}</div>
         <div class="musteri-alt">
-          <span class="etiket tur-etiketi">${g.tur || 'Türü belirtilmemiş'}</span> ${tarihYaz(g.tarih)}
+          <span class="etiket tur-etiketi">${guvenli(g.tur || 'Türü belirtilmemiş')}</span> ${tarihYaz(g.tarih)}
         </div>
       </div>
       <span class="gider-tutar">${paraYaz(g.tutar)}</span>
@@ -1312,6 +1315,7 @@ async function ayarlariCiz() {
   ekranGoster('ekran-ayarlar', 'Ayarlar', '/yonetici', 'yonetici');
   ayarlarFormu.birimFiyat.value = String(ayarlar.birimFiyat).replace('.', ',');
   alanHatalariniTemizle(ayarlarFormu);
+  yedekSorunlariniGoster([]);
   surumuGoster();
 }
 
@@ -1331,24 +1335,35 @@ ayarlarFormu.addEventListener('submit', olay => {
   });
 });
 
+// Verilen veriyi (musteriler, siparisler, giderler, ayarlar) yedek dosyası olarak indirir
+function yedekDosyasiIndir(veri, dosyaAdi) {
+  const yedek = {
+    uygulama: 'hali-yikama',
+    yedekTarihi: new Date().toISOString(),
+    ...veri
+  };
+  const dosya = new Blob([JSON.stringify(yedek, null, 2)], { type: 'application/json' });
+  const baglanti = document.createElement('a');
+  baglanti.href = URL.createObjectURL(dosya);
+  baglanti.download = dosyaAdi;
+  document.body.appendChild(baglanti);
+  baglanti.click();
+  baglanti.remove();
+  setTimeout(() => URL.revokeObjectURL(baglanti.href), 5000);
+}
+
+// Dosya adları için: "2026-10-15-1430"
+function zamanEtiketi() {
+  const simdi = new Date();
+  return `${bugun()}-${String(simdi.getHours()).padStart(2, '0')}${String(simdi.getMinutes()).padStart(2, '0')}`;
+}
+
 // --- Yedeği indir: tüm veriyi (silinmişler dahil) bir .json dosyası olarak kaydeder ---
 // Hem Ayarlar'daki hem ana ekrandaki "Şimdi Yedekle" butonu bunu kullanır.
 async function yedekIndir() {
   const veri = await veriIslemi(tumVeriyiGetir, 'Yedek hazırlanamadı, tekrar deneyin.');
   if (!veri) return;
-  const yedek = {
-    uygulama: 'hali-yikama',
-    yedekTarihi: new Date().toISOString(),
-    ...veri // musteriler, siparisler, giderler, ayarlar
-  };
-  const dosya = new Blob([JSON.stringify(yedek, null, 2)], { type: 'application/json' });
-  const baglanti = document.createElement('a');
-  baglanti.href = URL.createObjectURL(dosya);
-  baglanti.download = `hali-yikama-yedek-${bugun()}.json`;
-  document.body.appendChild(baglanti);
-  baglanti.click();
-  baglanti.remove();
-  setTimeout(() => URL.revokeObjectURL(baglanti.href), 5000);
+  yedekDosyasiIndir(veri, `hali-yikama-yedek-${bugun()}.json`);
 
   // Hatırlatıcı sıfırlansın (dosya indi ama tarih yazılamazsa bunu da söyle)
   if (!await veriIslemi(sonYedekKaydet, 'Yedek indirildi ama yedek tarihi kaydedilemedi.')) return;
@@ -1359,7 +1374,37 @@ document.getElementById('yedek-indir-butonu').addEventListener('click', olay =>
   islemSirasinda(olay.currentTarget, yedekIndir));
 
 // --- Yedekten geri yükle: seçilen dosyadaki veriyi cihaza yazar ---
+// Sıra: 1) dosyayı kontrol et (uygunsuzsa nedenleriyle reddet)
+//       2) cihazdaki mevcut verinin otomatik yedeğini indir
+//       3) onay sor  4) yükle
 const yedekDosyasiSecici = document.getElementById('yedek-dosyasi');
+const EN_FAZLA_SORUN = 5; // Kırmızı kutuda en fazla bu kadar sorun yazılır
+
+// Uygunsuz yedek dosyasının nedenlerini Ayarlar'daki kırmızı kutuda gösterir.
+// Boş liste verilirse kutuyu gizler. Yazılar textContent ile basılır (dosyadaki
+// yazılar asla kod olarak çalışmaz).
+function yedekSorunlariniGoster(sorunlar) {
+  const kutu = document.getElementById('yedek-sorunlari');
+  kutu.replaceChildren();
+  kutu.hidden = sorunlar.length === 0;
+  if (sorunlar.length === 0) return;
+
+  const baslik = document.createElement('strong');
+  baslik.textContent = 'Bu dosya yüklenmedi; cihazdaki veriye dokunulmadı. Nedenleri:';
+  const liste = document.createElement('ul');
+  sorunlar.slice(0, EN_FAZLA_SORUN).forEach(sorun => {
+    const madde = document.createElement('li');
+    madde.textContent = sorun;
+    liste.appendChild(madde);
+  });
+  if (sorunlar.length > EN_FAZLA_SORUN) {
+    const madde = document.createElement('li');
+    madde.textContent = `ve ${sorunlar.length - EN_FAZLA_SORUN} sorun daha`;
+    liste.appendChild(madde);
+  }
+  kutu.append(baslik, liste);
+  kutu.scrollIntoView({ block: 'center' });
+}
 
 document.getElementById('yedek-yukle-butonu').addEventListener('click', () => {
   yedekDosyasiSecici.value = ''; // Aynı dosya tekrar seçilebilsin
@@ -1369,6 +1414,7 @@ document.getElementById('yedek-yukle-butonu').addEventListener('click', () => {
 yedekDosyasiSecici.addEventListener('change', () => {
   const dosya = yedekDosyasiSecici.files[0];
   if (!dosya) return;
+  yedekSorunlariniGoster([]);
 
   const okuyucu = new FileReader();
   okuyucu.onload = async () => {
@@ -1376,17 +1422,32 @@ yedekDosyasiSecici.addEventListener('change', () => {
     try {
       yedek = JSON.parse(okuyucu.result);
     } catch (hata) {
-      alert('Bu dosya okunamadı. Geçerli bir yedek dosyası seçin.');
-      return;
-    }
-    if (!yedek || !Array.isArray(yedek.musteriler) || !Array.isArray(yedek.siparisler)) {
-      alert('Bu dosya bir halı yıkama yedeği değil.');
+      yedekSorunlariniGoster(['Dosya okunamadı: bu bir yedek dosyası (.json) değil.']);
       return;
     }
 
+    // 1) Alan türlerini kontrol et; tek bir sorun bile varsa dosya yüklenmez
+    const sorunlar = await yedekKontrolEt(yedek);
+    if (sorunlar.length > 0) {
+      yedekSorunlariniGoster(sorunlar);
+      return;
+    }
+
+    // 2) Cihazda kayıt varsa (silinmişler dahil) önce onların otomatik yedeğini indir
+    const mevcut = await veriIslemi(tumVeriyiGetir, 'Mevcut veri okunamadı; geri yükleme yapılmadı.');
+    if (!mevcut) return;
+    let soru = '';
+    if (mevcut.musteriler.length + mevcut.siparisler.length + mevcut.giderler.length > 0) {
+      const dosyaAdi = `hali-yikama-geri-yukleme-oncesi-${zamanEtiketi()}.json`;
+      yedekDosyasiIndir(mevcut, dosyaAdi);
+      soru += `Önce bu cihazdaki mevcut veriniz "${dosyaAdi}" adıyla indirildi. ` +
+        'Lütfen dosyanın indiğini kontrol edin.\n\n';
+    }
+
+    // 3) Onay (otomatik yedek indikten SONRA sorulur)
     const sayilar = await yedektekiKayitSayilari(yedek);
-    const soru = `Yedekte ${sayilar.musteri} müşteri, ${sayilar.siparis} sipariş ve ${sayilar.gider} gider var.\n\n` +
-      'Geri yüklerseniz bu cihazdaki MEVCUT TÜM VERİ silinip yedektekiyle değiştirilecek. Devam edilsin mi?';
+    soru += `Yüklenecek yedekte ${sayilar.musteri} müşteri, ${sayilar.siparis} sipariş ve ${sayilar.gider} gider var.\n\n` +
+      'Devam ederseniz bu cihazdaki mevcut veri yedektekiyle değiştirilecek. Devam edilsin mi?';
     if (!confirm(soru)) return;
 
     // Eski sürüm yedeğiyse eksik alanlar (durum adları, numaralar, zamanlar) veri.js'de tamamlanır

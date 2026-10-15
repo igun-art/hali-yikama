@@ -33,7 +33,7 @@
      5. Siparişler
      6. Giderler
      7. Ayarlar
-     8. Yedekleme (tüm veri)
+     8. Yedekleme (tüm veri, yedek dosyası kontrolü)
      9. Eski verileri yeni yapıya uyarlama
    ===================================================================== */
 
@@ -65,6 +65,11 @@ const ESKI_DURUMLAR = {
   'Yıkanıyor': 'Yıkamada',
   'Teslim edildi': 'Teslim Edildi'
 };
+
+// Gerçekten listedeki eski bir durum adı mı? ("toString" gibi her nesnede olan adlar sayılmaz)
+function eskiDurumMu(durum) {
+  return typeof durum === 'string' && Object.prototype.hasOwnProperty.call(ESKI_DURUMLAR, durum);
+}
 
 
 /* ===================== 2. LOCALSTORAGE OKUMA / YAZMA =====================
@@ -289,6 +294,121 @@ async function tumVeriyiGetir() {
   };
 }
 
+// --- Yedek dosyası kontrolü ---
+// Dosyadaki her kaydın alanlarını kontrol eder. Sorun yoksa boş liste,
+// varsa Türkçe sorun açıklamalarının listesini döndürür
+// (örn. "Sipariş #5: tarih geçersiz"). Tek bir sorun bile varsa dosya YÜKLENMEZ.
+// Eski sürüm yedeklerinde olmayan alanlar ve eski durum adları sorun sayılmaz.
+async function yedekKontrolEt(yedek) {
+  const sorunlar = [];
+  const bosMu = x => x === undefined || x === null;
+  const metinMi = x => typeof x === 'string';
+  const sayiMi = x => typeof x === 'number' && isFinite(x);
+  const pozitifTamSayiMi = x => Number.isInteger(x) && x >= 1;
+  const listeMi = x => Array.isArray(x);
+  const nesneMi = x => x !== null && typeof x === 'object' && !Array.isArray(x);
+  // "2026-10-15" biçiminde ve gerçekten var olan bir gün mü (31 Şubat değil)
+  const tarihMi = x => {
+    if (!metinMi(x) || !/^\d{4}-\d{2}-\d{2}$/.test(x)) return false;
+    const [yil, ay, gun] = x.split('-').map(Number);
+    const d = new Date(yil, ay - 1, gun);
+    return d.getFullYear() === yil && d.getMonth() === ay - 1 && d.getDate() === gun;
+  };
+
+  // 1) Dosyanın genel yapısı
+  if (!nesneMi(yedek)) return ['Dosya bir halı yıkama yedeği değil.'];
+  if (!listeMi(yedek.musteriler)) sorunlar.push('Dosyada müşteri listesi yok veya bozuk.');
+  if (!listeMi(yedek.siparisler)) sorunlar.push('Dosyada sipariş listesi yok veya bozuk.');
+  if (!bosMu(yedek.giderler) && !listeMi(yedek.giderler)) sorunlar.push('Dosyadaki gider listesi bozuk.');
+  if (!bosMu(yedek.ayarlar) && !nesneMi(yedek.ayarlar)) sorunlar.push('Dosyadaki ayarlar bozuk.');
+  if (sorunlar.length) return sorunlar;
+
+  // 2) Her kayıtta ortak alanlar (id, zamanlar, kaydeden, silindi) ve tekrar eden kimlik
+  const ortakKontrol = (liste, adVer) => {
+    const gorulenler = new Set();
+    liste.forEach((k, i) => {
+      if (!nesneMi(k)) { sorunlar.push(`${adVer(k, i)}: kayıt bozuk.`); return; }
+      const ad = adVer(k, i);
+      if (!metinMi(k.id) || k.id === '') sorunlar.push(`${ad}: kimlik (id) eksik.`);
+      else if (gorulenler.has(k.id)) sorunlar.push(`${ad}: aynı kimlik (id) iki kez geçiyor.`);
+      else gorulenler.add(k.id);
+      if (!bosMu(k.olusturma) && !sayiMi(k.olusturma)) sorunlar.push(`${ad}: oluşturma zamanı geçersiz.`);
+      if (!bosMu(k.guncelleme) && !sayiMi(k.guncelleme)) sorunlar.push(`${ad}: güncelleme zamanı geçersiz.`);
+      if (!bosMu(k.kaydeden) && !metinMi(k.kaydeden)) sorunlar.push(`${ad}: "kaydeden" alanı geçersiz.`);
+      if (!bosMu(k.silindi) && typeof k.silindi !== 'boolean') sorunlar.push(`${ad}: "silindi" alanı geçersiz.`);
+    });
+  };
+
+  // 3) Müşteriler
+  const musteriAdi = (m, i) => nesneMi(m) && metinMi(m.ad)
+    ? `${i + 1}. müşteri (${m.ad} ${metinMi(m.soyad) ? m.soyad : ''})`.replace(' )', ')')
+    : `${i + 1}. müşteri`;
+  ortakKontrol(yedek.musteriler, musteriAdi);
+  const musteriKimlikleri = new Set();
+  yedek.musteriler.forEach((m, i) => {
+    if (!nesneMi(m)) return;
+    const ad = musteriAdi(m, i);
+    if (metinMi(m.id)) musteriKimlikleri.add(m.id);
+    if (!metinMi(m.ad)) sorunlar.push(`${ad}: ad eksik.`);
+    if (!metinMi(m.soyad)) sorunlar.push(`${ad}: soyad eksik.`);
+    if (!metinMi(m.telefon)) sorunlar.push(`${ad}: telefon eksik.`);
+    if (!bosMu(m.adres) && !metinMi(m.adres)) sorunlar.push(`${ad}: adres geçersiz.`);
+  });
+
+  // 4) Siparişler
+  const siparisAdi = (s, i) => nesneMi(s) && pozitifTamSayiMi(s.no) ? `Sipariş #${s.no}` : `${i + 1}. sipariş`;
+  ortakKontrol(yedek.siparisler, siparisAdi);
+  const gorulenNumaralar = new Set();
+  yedek.siparisler.forEach((s, i) => {
+    if (!nesneMi(s)) return;
+    const ad = siparisAdi(s, i);
+    if (!metinMi(s.musteriId) || !musteriKimlikleri.has(s.musteriId)) sorunlar.push(`${ad}: müşterisi dosyada yok.`);
+    if (!tarihMi(s.tarih)) sorunlar.push(`${ad}: tarih geçersiz (2026-10-15 gibi olmalı).`);
+    if (!sayiMi(s.metrekare) || s.metrekare <= 0) sorunlar.push(`${ad}: metrekare 0'dan büyük bir sayı olmalı.`);
+    if (!sayiMi(s.birimFiyat) || s.birimFiyat < 0) sorunlar.push(`${ad}: birim fiyat sayı olmalı.`);
+    if (!sayiMi(s.tutar) || s.tutar < 0) sorunlar.push(`${ad}: tutar sayı olmalı.`);
+    if (!bosMu(s.no)) {
+      if (!pozitifTamSayiMi(s.no)) sorunlar.push(`${ad}: sipariş numarası pozitif tam sayı olmalı.`);
+      else if (gorulenNumaralar.has(s.no)) sorunlar.push(`${ad}: aynı sipariş numarası iki kez geçiyor.`);
+      else gorulenNumaralar.add(s.no);
+    }
+    if (!bosMu(s.parcaSayisi) && !pozitifTamSayiMi(s.parcaSayisi)) sorunlar.push(`${ad}: parça sayısı pozitif tam sayı olmalı.`);
+    if (!bosMu(s.durum) && !DURUMLAR.includes(s.durum) && !eskiDurumMu(s.durum)) {
+      sorunlar.push(`${ad}: durum tanınmıyor.`);
+    }
+    if (!bosMu(s.odemeAlindi) && typeof s.odemeAlindi !== 'boolean') sorunlar.push(`${ad}: "ödeme alındı" alanı geçersiz.`);
+    if (!bosMu(s.odemeTarihi) && !tarihMi(s.odemeTarihi)) sorunlar.push(`${ad}: ödeme tarihi geçersiz.`);
+    if (!bosMu(s.odemeYontemi) && !ODEME_YONTEMLERI.includes(s.odemeYontemi)) {
+      sorunlar.push(`${ad}: ödeme yöntemi tanınmıyor (Nakit, Kart veya Havale olmalı).`);
+    }
+    if (!bosMu(s.teslimTarihi) && !tarihMi(s.teslimTarihi)) sorunlar.push(`${ad}: teslim tarihi geçersiz.`);
+  });
+
+  // 5) Giderler (eski yedeklerde hiç olmayabilir)
+  const giderler = yedek.giderler || [];
+  const giderAdi = (g, i) => `${i + 1}. gider`;
+  ortakKontrol(giderler, giderAdi);
+  giderler.forEach((g, i) => {
+    if (!nesneMi(g)) return;
+    const ad = giderAdi(g, i);
+    if (!tarihMi(g.tarih)) sorunlar.push(`${ad}: tarih geçersiz (2026-10-15 gibi olmalı).`);
+    if (!sayiMi(g.tutar) || g.tutar <= 0) sorunlar.push(`${ad}: tutar 0'dan büyük bir sayı olmalı.`);
+    if (!bosMu(g.tur) && !GIDER_TURLERI.includes(g.tur)) sorunlar.push(`${ad}: tür tanınmıyor (Yakıt, Malzeme veya Diğer olmalı).`);
+    if (!bosMu(g.aciklama) && !metinMi(g.aciklama)) sorunlar.push(`${ad}: açıklama geçersiz.`);
+  });
+
+  // 6) Ayarlar
+  const ayarlar = yedek.ayarlar || {};
+  if (!bosMu(ayarlar.birimFiyat) && (!sayiMi(ayarlar.birimFiyat) || ayarlar.birimFiyat <= 0)) {
+    sorunlar.push('Ayarlar: birim fiyat 0\'dan büyük bir sayı olmalı.');
+  }
+  if (!bosMu(ayarlar.sonSiparisNo) && !(Number.isInteger(ayarlar.sonSiparisNo) && ayarlar.sonSiparisNo >= 0)) {
+    sorunlar.push('Ayarlar: son sipariş numarası geçersiz.');
+  }
+
+  return sorunlar;
+}
+
 // Bir yedek dosyasında kaç tane (silinmemiş) kayıt olduğunu sayar (onay sorusu için)
 async function yedektekiKayitSayilari(yedek) {
   const say = liste => (Array.isArray(liste) ? silinmemisler(liste).length : 0);
@@ -350,8 +470,13 @@ async function veriyiDuzenle() {
   [musteriler, siparisler, giderler].forEach(liste => liste.forEach(kayitAlanlariniTamamla));
 
   siparisler.forEach(s => {
+    // Sipariş numarası pozitif tam sayı olmalı; değilse yok sayılır, aşağıda yeni numara verilir.
+    // (GÜVENLİK: numara alanına yazı/kod konmuş bir yedek dosyası ekrana kod basamasın.)
+    const no = Number(s.no);
+    s.no = Number.isInteger(no) && no >= 1 ? no : null;
+
     // Durum adları: "Yıkanıyor" -> "Yıkamada" gibi
-    if (!DURUMLAR.includes(s.durum)) s.durum = ESKI_DURUMLAR[s.durum] || DURUMLAR[0];
+    if (!DURUMLAR.includes(s.durum)) s.durum = eskiDurumMu(s.durum) ? ESKI_DURUMLAR[s.durum] : DURUMLAR[0];
 
     // Ödemesi alınmış ama ödeme tarihi olmayan eski siparişlerde sipariş tarihi kullanılır
     s.odemeAlindi = !!s.odemeAlindi;

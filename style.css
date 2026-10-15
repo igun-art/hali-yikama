@@ -914,6 +914,27 @@ select:focus,
   margin-top: 16px;
 }
 
+/* Uygunsuz yedek dosyası: nedenler kırmızı kutuda */
+.yedek-sorunlari {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 2px solid var(--tehlike);
+  border-radius: var(--kose);
+  background: #ffebee;
+  color: var(--tehlike);
+  font-size: 15px;
+}
+
+.yedek-sorunlari ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.yedek-sorunlari li {
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+
 /* Gider listesi: toplam satırı ve tür etiketi */
 .toplam-satiri {
   display: flex;

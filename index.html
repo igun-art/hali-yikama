@@ -2,6 +2,12 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
+  <!-- GÜVENLİK POLİTİKASI (Content-Security-Policy):
+       Kod, stil, resim vb. SADECE uygulamanın kendi dosyalarından yüklenir;
+       sayfaya gömülü kod çalışmaz; dışarıya veri gönderilemez (connect-src 'self').
+       Bir kayıttaki yazı bir şekilde kod olarak çalışsa bile müşteri verisini dışarı yollayamaz.
+       Buluta geçince bulutun adresi connect-src'ye eklenmelidir. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Halı Yıkama</title>
 
@@ -240,6 +246,8 @@
         <button class="buton" id="yedek-indir-butonu">Yedeği İndir</button>
         <button class="buton" id="yedek-yukle-butonu">Yedekten Geri Yükle</button>
         <input type="file" id="yedek-dosyasi" accept=".json,application/json" hidden>
+        <!-- Uygunsuz yedek dosyası seçilirse nedenleri burada kırmızı kutuda görünür -->
+        <div id="yedek-sorunlari" class="yedek-sorunlari" role="alert" hidden></div>
       </div>
 
       <p class="surum" id="surum-bilgisi"></p>

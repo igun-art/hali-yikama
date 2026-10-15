@@ -6,7 +6,7 @@
    Telefonlar ancak bu dosya değişince yeni sürümü indirir.
    ===================================================================== */
 
-const SURUM = '1.8.0';
+const SURUM = '1.9.0';
 const CACHE_NAME = 'hali-yikama-' + SURUM;
 
 // Önbelleğe alınacak (internetsiz çalışacak) dosyalar
