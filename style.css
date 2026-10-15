@@ -935,6 +935,34 @@ select:focus,
   overflow-wrap: anywhere;
 }
 
+/* Yedekle butonunun altındaki ipucu */
+.ipucu {
+  margin-top: -2px;
+  font-size: 14px;
+}
+
+/* Geri yükleme adımı: "Mevcut Veriyi Yedekle ve Devam Et" */
+.geri-yukleme-adimi {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 2px solid var(--ana-renk);
+  border-radius: var(--kose);
+  background: #e3f2fd;
+}
+
+.geri-yukleme-adimi p {
+  margin: 0 0 8px;
+}
+
+.adim-uyarisi {
+  color: var(--tehlike);
+  font-weight: 700;
+}
+
+.adim-uyarisi::before {
+  content: "⚠ ";
+}
+
 /* Gider listesi: toplam satırı ve tür etiketi */
 .toplam-satiri {
   display: flex;

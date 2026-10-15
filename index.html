@@ -243,11 +243,19 @@
       <div class="kart">
         <h3>Yedekleme</h3>
         <p class="aciklama">Tüm veriler sadece bu cihazda durur. Telefon değiştirmeden veya tarayıcı verisini silmeden önce mutlaka yedek alın.</p>
-        <button class="buton" id="yedek-indir-butonu">Yedeği İndir</button>
+        <button class="buton" id="yedekle-butonu">Yedekle</button>
+        <p class="aciklama ipucu">iPhone'da açılan menüden iCloud Drive'a kaydetmeniz önerilir; telefon kaybolsa bile yedek korunur.</p>
         <button class="buton" id="yedek-yukle-butonu">Yedekten Geri Yükle</button>
         <input type="file" id="yedek-dosyasi" accept=".json,application/json" hidden>
         <!-- Uygunsuz yedek dosyası seçilirse nedenleri burada kırmızı kutuda görünür -->
         <div id="yedek-sorunlari" class="yedek-sorunlari" role="alert" hidden></div>
+        <!-- Geri yükleme adımı: önce mevcut veri kaydedilir, kaydedilmezse geri yükleme yapılmaz -->
+        <div id="geri-yukleme-adimi" class="geri-yukleme-adimi" hidden>
+          <p id="geri-yukleme-bilgisi"></p>
+          <p id="geri-yukleme-uyarisi" class="adim-uyarisi" role="alert" hidden>Önce mevcut verinin yedeğini kaydedin. Yedek kaydedilmeden geri yükleme yapılmaz.</p>
+          <button class="buton buton-ana" id="once-yedekle-butonu">Mevcut Veriyi Yedekle ve Devam Et</button>
+          <button class="buton buton-gri" id="geri-yukleme-vazgec">Vazgeç</button>
+        </div>
       </div>
 
       <p class="surum" id="surum-bilgisi"></p>

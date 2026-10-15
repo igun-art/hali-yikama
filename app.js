@@ -741,7 +741,7 @@ function yedekHatirlaticisiniCiz(sonYedek) {
 
 document.getElementById('simdi-yedekle-butonu').addEventListener('click', olay =>
   islemSirasinda(olay.currentTarget, async () => {
-    await yedekIndir();
+    await yedekle(); // Telefonda paylaş menüsü açılır
     yedekHatirlaticisiniCiz(await sonYedekZamani());
   }));
 
@@ -1316,6 +1316,7 @@ async function ayarlariCiz() {
   ayarlarFormu.birimFiyat.value = String(ayarlar.birimFiyat).replace('.', ',');
   alanHatalariniTemizle(ayarlarFormu);
   yedekSorunlariniGoster([]);
+  geriYuklemeAdiminiKapat();
   surumuGoster();
 }
 
@@ -1335,14 +1336,39 @@ ayarlarFormu.addEventListener('submit', olay => {
   });
 });
 
-// Verilen veriyi (musteriler, siparisler, giderler, ayarlar) yedek dosyası olarak indirir
-function yedekDosyasiIndir(veri, dosyaAdi) {
+// --- Yedek dosyasını kaydettirme ---
+// Telefonda (iPhone/Android) paylaş menüsü açılır: iCloud Drive, Dosyalar, WhatsApp, Mail...
+// Paylaşımı desteklemeyen cihazda (bilgisayar) dosya eskisi gibi indirilir.
+// (iPhone'da ana ekrandan açılan uygulamada indirme sadece önizleme açıyor, dosya
+//  kaydedilmiyordu; paylaş menüsü bu sorunu çözer.)
+//
+// Sonuç: 'tamam'      -> kaydedildi (telefon "paylaşım tamamlandı" dedi / dosya indi)
+//        'vazgecildi' -> kullanıcı menüyü kapattı
+//        'hata'       -> menü açılamadı
+//
+// DİKKAT: Telefon paylaş menüsünü SADECE kullanıcı bir butona dokunduğu anda açar.
+// Bu fonksiyon bir buton tıklamasının içinden, araya uzun bekleme girmeden çağrılmalıdır.
+async function yedekKaydet(veri, dosyaAdi) {
   const yedek = {
     uygulama: 'hali-yikama',
     yedekTarihi: new Date().toISOString(),
-    ...veri
+    ...veri // musteriler, siparisler, giderler, ayarlar (silinmişler dahil)
   };
-  const dosya = new Blob([JSON.stringify(yedek, null, 2)], { type: 'application/json' });
+  const dosya = new File([JSON.stringify(yedek, null, 2)], dosyaAdi, { type: 'application/json' });
+
+  // Paylaşım (dosya olarak) destekleniyorsa paylaş menüsünü aç
+  if (navigator.canShare && navigator.canShare({ files: [dosya] })) {
+    try {
+      await navigator.share({ files: [dosya], title: 'Halı Yıkama yedeği' });
+      return 'tamam';
+    } catch (hata) {
+      if (hata && hata.name === 'AbortError') return 'vazgecildi'; // Menü kapatıldı
+      console.error('Paylaşım açılamadı:', hata);
+      return 'hata';
+    }
+  }
+
+  // Desteklenmiyorsa (bilgisayar): dosyayı indir
   const baglanti = document.createElement('a');
   baglanti.href = URL.createObjectURL(dosya);
   baglanti.download = dosyaAdi;
@@ -1350,6 +1376,7 @@ function yedekDosyasiIndir(veri, dosyaAdi) {
   baglanti.click();
   baglanti.remove();
   setTimeout(() => URL.revokeObjectURL(baglanti.href), 5000);
+  return 'tamam';
 }
 
 // Dosya adları için: "2026-10-15-1430"
@@ -1358,26 +1385,41 @@ function zamanEtiketi() {
   return `${bugun()}-${String(simdi.getHours()).padStart(2, '0')}${String(simdi.getMinutes()).padStart(2, '0')}`;
 }
 
-// --- Yedeği indir: tüm veriyi (silinmişler dahil) bir .json dosyası olarak kaydeder ---
-// Hem Ayarlar'daki hem ana ekrandaki "Şimdi Yedekle" butonu bunu kullanır.
-async function yedekIndir() {
+// --- Yedekle: tüm veriyi (silinmişler dahil) yedek dosyası olarak kaydettirir ---
+// Hem Ayarlar'daki "Yedekle" hem ana ekrandaki "Şimdi Yedekle" butonu bunu kullanır.
+// "Son yedek" tarihi SADECE kaydetme gerçekten tamamlanırsa güncellenir.
+async function yedekle() {
   const veri = await veriIslemi(tumVeriyiGetir, 'Yedek hazırlanamadı, tekrar deneyin.');
   if (!veri) return;
-  yedekDosyasiIndir(veri, `hali-yikama-yedek-${bugun()}.json`);
 
-  // Hatırlatıcı sıfırlansın (dosya indi ama tarih yazılamazsa bunu da söyle)
-  if (!await veriIslemi(sonYedekKaydet, 'Yedek indirildi ama yedek tarihi kaydedilemedi.')) return;
-  bildirimGoster('Yedek dosyası hazırlandı');
+  const sonuc = await yedekKaydet(veri, `hali-yikama-yedek-${bugun()}.json`);
+  if (sonuc === 'vazgecildi') {
+    bildirimGoster('Yedek kaydedilmedi; "Son yedek" tarihi değişmedi.');
+    return;
+  }
+  if (sonuc === 'hata') {
+    hataGoster('Paylaşım açılamadı, tekrar deneyin.');
+    return;
+  }
+
+  // Hatırlatıcı sıfırlansın (kaydedildi ama tarih yazılamazsa bunu da söyle)
+  if (!await veriIslemi(sonYedekKaydet, 'Yedek kaydedildi ama yedek tarihi kaydedilemedi.')) return;
+  bildirimGoster('Yedek kaydedildi');
 }
 
-document.getElementById('yedek-indir-butonu').addEventListener('click', olay =>
-  islemSirasinda(olay.currentTarget, yedekIndir));
+document.getElementById('yedekle-butonu').addEventListener('click', olay =>
+  islemSirasinda(olay.currentTarget, yedekle));
 
 // --- Yedekten geri yükle: seçilen dosyadaki veriyi cihaza yazar ---
 // Sıra: 1) dosyayı kontrol et (uygunsuzsa nedenleriyle reddet)
-//       2) cihazdaki mevcut verinin otomatik yedeğini indir
+//       2) cihazda veri varsa: "Mevcut Veriyi Yedekle ve Devam Et" adımı;
+//          kullanıcı butona basar, mevcut veri kaydedilir (paylaş menüsü / indirme).
+//          Kaydetme tamamlanmazsa geri yükleme YAPILMAZ.
 //       3) onay sor  4) yükle
+// (2. adım ayrı bir buton çünkü telefon paylaş menüsünü dosya seçiminden sonra
+//  kendiliğinden açmaz; kullanıcının bir butona dokunması gerekir.)
 const yedekDosyasiSecici = document.getElementById('yedek-dosyasi');
+let bekleyenYedek = null; // Kontrolden geçmiş, yüklenmeyi bekleyen yedek dosyası
 const EN_FAZLA_SORUN = 5; // Kırmızı kutuda en fazla bu kadar sorun yazılır
 
 // Uygunsuz yedek dosyasının nedenlerini Ayarlar'daki kırmızı kutuda gösterir.
@@ -1406,15 +1448,80 @@ function yedekSorunlariniGoster(sorunlar) {
   kutu.scrollIntoView({ block: 'center' });
 }
 
+// Yüklenecek yedeğin özeti: "Yüklenecek yedekte 12 müşteri, 40 sipariş ve 5 gider var."
+async function yedekOzeti(yedek) {
+  const sayilar = await yedektekiKayitSayilari(yedek);
+  return `Yüklenecek yedekte ${sayilar.musteri} müşteri, ${sayilar.siparis} sipariş ve ${sayilar.gider} gider var.`;
+}
+
+// "Mevcut Veriyi Yedekle ve Devam Et" adım kutusunu açar / kapatır
+function geriYuklemeAdiminiGoster(ozet) {
+  document.getElementById('geri-yukleme-bilgisi').textContent =
+    `${ozet} Geri yüklemeden önce bu cihazdaki mevcut verinin yedeğini kaydetmelisiniz.`;
+  document.getElementById('geri-yukleme-uyarisi').hidden = true;
+  const kutu = document.getElementById('geri-yukleme-adimi');
+  kutu.hidden = false;
+  kutu.scrollIntoView({ block: 'center' });
+}
+
+function geriYuklemeAdiminiKapat() {
+  bekleyenYedek = null;
+  document.getElementById('geri-yukleme-adimi').hidden = true;
+  document.getElementById('geri-yukleme-uyarisi').hidden = true;
+}
+
+// Son onaydan sonra yedeği cihaza yazar
+async function yedektenGeriYukle(yedek) {
+  // Eski sürüm yedeğiyse eksik alanlar (durum adları, numaralar, zamanlar) veri.js'de tamamlanır
+  if (await veriIslemi(() => tumVeriyiDegistir(yedek),
+      'Yedek geri yüklenemedi, tekrar deneyin. Cihazdaki veri değişmedi.')) {
+    geriYuklemeAdiminiKapat();
+    alert('Yedek başarıyla geri yüklendi.');
+    await ayarlariCiz();
+  }
+}
+
 document.getElementById('yedek-yukle-butonu').addEventListener('click', () => {
   yedekDosyasiSecici.value = ''; // Aynı dosya tekrar seçilebilsin
   yedekDosyasiSecici.click();
+});
+
+// "Mevcut Veriyi Yedekle ve Devam Et": önce mevcut veri kaydedilir, sonra onay, sonra yükleme
+document.getElementById('once-yedekle-butonu').addEventListener('click', olay =>
+  islemSirasinda(olay.currentTarget, async () => {
+    if (!bekleyenYedek) return;
+    const mevcut = await veriIslemi(tumVeriyiGetir, 'Mevcut veri okunamadı; geri yükleme yapılmadı.');
+    if (!mevcut) return;
+
+    const sonuc = await yedekKaydet(mevcut, `hali-yikama-geri-yukleme-oncesi-${zamanEtiketi()}.json`);
+    if (sonuc !== 'tamam') {
+      // Kaydedilmedi: geri yükleme YAPILMAZ, uyarı kutuda kalır
+      document.getElementById('geri-yukleme-uyarisi').hidden = false;
+      if (sonuc === 'hata') hataGoster('Paylaşım açılamadı, tekrar deneyin.');
+      return;
+    }
+    document.getElementById('geri-yukleme-uyarisi').hidden = true;
+
+    const soru = `Mevcut veriniz kaydedildi.\n\n${await yedekOzeti(bekleyenYedek)}\n\n` +
+      'Devam ederseniz bu cihazdaki mevcut veri yedektekiyle değiştirilecek. Devam edilsin mi?';
+    if (!confirm(soru)) {
+      geriYuklemeAdiminiKapat();
+      bildirimGoster('Geri yükleme yapılmadı');
+      return;
+    }
+    await yedektenGeriYukle(bekleyenYedek);
+  }));
+
+document.getElementById('geri-yukleme-vazgec').addEventListener('click', () => {
+  geriYuklemeAdiminiKapat();
+  bildirimGoster('Geri yükleme yapılmadı');
 });
 
 yedekDosyasiSecici.addEventListener('change', () => {
   const dosya = yedekDosyasiSecici.files[0];
   if (!dosya) return;
   yedekSorunlariniGoster([]);
+  geriYuklemeAdiminiKapat(); // Yeni dosya seçildi; önceki bekleyen adım iptal
 
   const okuyucu = new FileReader();
   okuyucu.onload = async () => {
@@ -1433,29 +1540,19 @@ yedekDosyasiSecici.addEventListener('change', () => {
       return;
     }
 
-    // 2) Cihazda kayıt varsa (silinmişler dahil) önce onların otomatik yedeğini indir
+    // 2) Cihazda kayıt varsa (silinmişler dahil): önce yedekleme adımı (butonla)
     const mevcut = await veriIslemi(tumVeriyiGetir, 'Mevcut veri okunamadı; geri yükleme yapılmadı.');
     if (!mevcut) return;
-    let soru = '';
+    const ozet = await yedekOzeti(yedek);
     if (mevcut.musteriler.length + mevcut.siparisler.length + mevcut.giderler.length > 0) {
-      const dosyaAdi = `hali-yikama-geri-yukleme-oncesi-${zamanEtiketi()}.json`;
-      yedekDosyasiIndir(mevcut, dosyaAdi);
-      soru += `Önce bu cihazdaki mevcut veriniz "${dosyaAdi}" adıyla indirildi. ` +
-        'Lütfen dosyanın indiğini kontrol edin.\n\n';
+      bekleyenYedek = yedek;
+      geriYuklemeAdiminiGoster(ozet);
+      return; // Devamı "Mevcut Veriyi Yedekle ve Devam Et" butonunda
     }
 
-    // 3) Onay (otomatik yedek indikten SONRA sorulur)
-    const sayilar = await yedektekiKayitSayilari(yedek);
-    soru += `Yüklenecek yedekte ${sayilar.musteri} müşteri, ${sayilar.siparis} sipariş ve ${sayilar.gider} gider var.\n\n` +
-      'Devam ederseniz bu cihazdaki mevcut veri yedektekiyle değiştirilecek. Devam edilsin mi?';
-    if (!confirm(soru)) return;
-
-    // Eski sürüm yedeğiyse eksik alanlar (durum adları, numaralar, zamanlar) veri.js'de tamamlanır
-    if (await veriIslemi(() => tumVeriyiDegistir(yedek),
-        'Yedek geri yüklenemedi, tekrar deneyin. Cihazdaki veri değişmedi.')) {
-      alert('Yedek başarıyla geri yüklendi.');
-      await ayarlariCiz();
-    }
+    // Cihaz boş: kaydedilecek veri yok, doğrudan onay sor
+    if (!confirm(`${ozet}\n\nDevam edilsin mi?`)) return;
+    await yedektenGeriYukle(yedek);
   };
   okuyucu.readAsText(dosya);
 });
