@@ -238,7 +238,10 @@ async function yeniSiparisNo() {
 // bilgiler: { musteriId, tarih, metrekare, parcaSayisi, birimFiyat, tutar, durum,
 //             odemeAlindi, odemeTarihi, odemeYontemi, teslimTarihi }
 async function siparisEkle(bilgiler) {
-  return kayitEkle(ANAHTAR_SIPARISLER, { no: await yeniSiparisNo(), ...bilgiler });
+  const siparis = await kayitEkle(ANAHTAR_SIPARISLER, { no: await yeniSiparisNo(), ...bilgiler });
+  // Sanal bir müşteriye gerçek sipariş eklendiyse müşteri artık gerçek müşteridir (10. bölüm)
+  if (siparis && siparis.sanal !== true) await sanalMusteriyiGercegeCevir(siparis.musteriId);
+  return siparis;
 }
 
 // degisiklik: siparişi alıp değiştiren fonksiyon. Örnek: s => { s.durum = 'Hazır'; }
@@ -540,19 +543,31 @@ async function sanalKayitSayilari() {
   };
 }
 
+// Sanal bir müşteriye gerçek (sanal işaretsiz) sipariş eklenince çağrılır:
+// müşterinin sanal işareti kaldırılır, artık gerçek müşteridir.
+// (Müşterinin eski SANAL siparişleri sanal kalır; "Sanal Verileri Sil" onları yine siler.)
+async function sanalMusteriyiGercegeCevir(musteriId) {
+  const musteri = depodanOku(ANAHTAR_MUSTERILER, []).find(m => m.id === musteriId);
+  if (!musteri || musteri.sanal !== true) return true;
+  return !!(await kayitGuncelle(ANAHTAR_MUSTERILER, musteriId, m => { delete m.sanal; }));
+}
+
 // Sanal kayıtları KALICI olarak siler; gerçek (sanal olmayan) kayıtlara dokunmaz.
-// Gerçek siparişi olan sanal müşteri SİLİNMEZ (gerçek siparişin sahibi kaybolmasın).
-// Sonuç: { musteri, siparis, gider, korunanMusteri } (silinen sayıları) veya null.
-// Yarıda kalırsa eski hal geri konur.
+// Gerçek siparişi olan sanal müşteri SİLİNMEZ; sanal işareti kaldırılıp gerçek müşteriye
+// çevrilir (normalde bu, sipariş eklenirken zaten yapılır; burası eski/yedekten gelen
+// veriler için güvence).
+// Sonuç: { musteri, siparis, gider, gercegeCevrilen } veya null. Yarıda kalırsa eski hal geri konur.
 async function sanalVerileriSil() {
   const musteriler = depodanOku(ANAHTAR_MUSTERILER, []);
   const siparisler = depodanOku(ANAHTAR_SIPARISLER, []);
   const giderler = depodanOku(ANAHTAR_GIDERLER, []);
   const sanalMi = k => k && k.sanal === true;
 
-  // Gerçek siparişlerin sahibi olan müşteriler korunur
+  // Gerçek siparişlerin sahibi olan müşteriler korunur ve gerçeğe çevrilir
   const gercekSiparisSahipleri = new Set(siparisler.filter(s => !sanalMi(s)).map(s => s.musteriId));
+  let gercegeCevrilen = 0;
   const kalanMusteriler = musteriler.filter(m => !sanalMi(m) || gercekSiparisSahipleri.has(m.id));
+  kalanMusteriler.filter(sanalMi).forEach(m => { delete m.sanal; m.guncelleme = Date.now(); gercegeCevrilen++; });
   const kalanSiparisler = siparisler.filter(s => !sanalMi(s));
   const kalanGiderler = giderler.filter(g => !sanalMi(g));
 
@@ -568,6 +583,6 @@ async function sanalVerileriSil() {
     musteri: musteriler.length - kalanMusteriler.length,
     siparis: siparisler.length - kalanSiparisler.length,
     gider: giderler.length - kalanGiderler.length,
-    korunanMusteri: kalanMusteriler.filter(sanalMi).length
+    gercegeCevrilen: gercegeCevrilen
   };
 }

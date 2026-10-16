@@ -197,6 +197,41 @@ select:disabled {
   font-size: 15px;
 }
 
+/* Müşteri satırı + yanında harita ikonu (ikon satır butonunun dışında durur) */
+.musteri-satir-kapsayici {
+  display: flex;
+  align-items: center;
+  padding-right: 6px;
+}
+
+.musteri-satir-kapsayici .musteri-satiri {
+  flex: 1;
+  min-width: 0;
+}
+
+.musteri-adres {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+/* Harita ikonu: basınca adres Google Haritalar'da açılır */
+.harita-ikonu {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--kose);
+  background: #e3f2fd;
+  font-size: 22px;
+  text-decoration: none;
+}
+
+.harita-ikonu:active {
+  background: #bbdefb;
+}
+
 .rozet {
   display: inline-block;
   margin-left: 6px;
@@ -532,9 +567,17 @@ select:disabled {
 }
 
 .adres {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0 0 8px;
   color: var(--soluk-yazi);
   white-space: pre-line;
+}
+
+.adres span {
+  flex: 1;
+  overflow-wrap: anywhere;
 }
 
 /* ===== Sipariş kartı ===== */
@@ -968,6 +1011,18 @@ select:focus,
   display: flex;
   justify-content: space-between;
   font-size: 18px;
+}
+
+/* Sanal (gösterim) kayıtların yanındaki küçük, sade, gri etiket */
+.sanal-etiketi {
+  margin-left: 4px;
+  padding: 0 6px;
+  border: 1px solid #c3cad3;
+  background: #eef1f5;
+  color: var(--soluk-yazi);
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: middle;
 }
 
 .tur-etiketi {

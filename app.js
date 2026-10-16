@@ -151,6 +151,31 @@ function guvenli(metin) {
     .replace(/'/g, '&#39;');
 }
 
+// --- "Sanal" etiketi ---
+// Gösterim için yüklenmiş sanal kayıtların (sanal: true) yanında küçük gri etiket.
+// Gerçeğe dönen müşteride sanal işareti kalktığı için etiket de görünmez.
+function sanalEtiketiHTML(kayit) {
+  return kayit && kayit.sanal === true ? ' <span class="etiket sanal-etiketi">Sanal</span>' : '';
+}
+
+// --- Google Haritalar ---
+// Adresi Google Haritalar arama bağlantısına çevirir. Bu "evrensel" bağlantı telefonda
+// Google Haritalar uygulaması varsa onu, yoksa tarayıcıda haritayı açar; oradan yol tarifi alınır.
+// Adres URL için encodeURIComponent ile kodlanır (boşluk, Türkçe harf, "&" gibi karakterler bozulmaz).
+function haritaBaglantisi(adres) {
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(adres);
+}
+
+// Adresin yanındaki küçük harita ikonu (adres boşsa hiçbir şey döndürmez).
+// Yeni sekmede açılır (target="_blank"); uygulamadan çıkılmaz.
+// Bağlantı da guvenli()'den geçer (Güvenlik Kuralı 1).
+function haritaIkonuHTML(adres) {
+  const temiz = String(adres || '').trim();
+  if (!temiz) return '';
+  return `<a class="harita-ikonu" href="${guvenli(haritaBaglantisi(temiz))}" target="_blank" ` +
+    `rel="noopener noreferrer" aria-label="Adresi Google Haritalar'da aç" title="Haritada aç">📍</a>`;
+}
+
 // "Teslim Alındı" -> "durum-teslim-alindi" (CSS sınıfı için)
 // Sadece a-z, 0-9 ve "-" kalır; bozuk bir durum değeri HTML etiketinin dışına taşamaz.
 function durumSinifi(durum) {
@@ -321,7 +346,7 @@ function siparisSatiriHTML(s, musteriler, ileriButonuVar) {
   return `
     <li class="siparis-satiri ${durumSinifi(s.durum)}">
       <button class="satir-icerik" data-islem="ac" data-id="${guvenli(s.id)}" data-musteri="${guvenli(s.musteriId)}">
-        <div class="satir-ust"><span class="siparis-no">#${guvenli(s.no)}</span> ${isim}</div>
+        <div class="satir-ust"><span class="siparis-no">#${guvenli(s.no)}</span>${sanalEtiketiHTML(s)} ${isim}</div>
         <div class="musteri-alt">${tarihYaz(s.tarih)} · ${parcaVeMetrekare(s)} · ${paraYaz(s.tutar)} ${odeme}</div>
       </button>
       ${ileri}
@@ -896,12 +921,16 @@ async function musteriListesiniCiz() {
   liste.innerHTML = musteriler.map(m => {
     const acikSayisi = acikSiparisler.filter(s => s.musteriId === m.id).length;
     const rozet = acikSayisi > 0 ? `<span class="rozet">${acikSayisi} açık sipariş</span>` : '';
+    // Harita ikonu satır butonunun DIŞINDA durur: basınca sadece harita açılır, müşteri kartı açılmaz
+    const adres = String(m.adres || '').trim();
     return `
-      <li>
+      <li class="musteri-satir-kapsayici">
         <button class="musteri-satiri" data-id="${guvenli(m.id)}">
-          <div class="musteri-adi">${guvenli(m.ad)} ${guvenli(m.soyad)}${rozet}</div>
+          <div class="musteri-adi">${guvenli(m.ad)} ${guvenli(m.soyad)}${sanalEtiketiHTML(m)}${rozet}</div>
           <div class="musteri-alt">${guvenli(m.telefon)}</div>
+          ${adres ? `<div class="musteri-alt musteri-adres">${guvenli(adres)}</div>` : ''}
         </button>
+        ${haritaIkonuHTML(adres)}
       </li>`;
   }).join('');
 
@@ -956,11 +985,15 @@ async function musteriDetayiniCiz(musteriId, vurguSiparisId) {
 
   const yeniEkran = ekranGoster('ekran-musteri-detay', musteri.ad + ' ' + musteri.soyad, '/musteriler', 'musteriler');
 
-  document.getElementById('detay-isim').textContent = musteri.ad + ' ' + musteri.soyad;
+  document.getElementById('detay-isim').innerHTML =
+    `${guvenli(musteri.ad)} ${guvenli(musteri.soyad)}${sanalEtiketiHTML(musteri)}`;
   const telefon = document.getElementById('detay-telefon');
   telefon.textContent = musteri.telefon;
   telefon.href = 'tel:' + musteri.telefon.replace(/[^\d+]/g, ''); // Basınca arama açılır
-  document.getElementById('detay-adres').textContent = musteri.adres || '';
+  // Adres + yanında harita ikonu (adres boşsa ikisi de görünmez)
+  const detayAdres = String(musteri.adres || '').trim();
+  document.getElementById('detay-adres').innerHTML =
+    detayAdres ? `<span>${guvenli(detayAdres)}</span>${haritaIkonuHTML(detayAdres)}` : '';
   document.getElementById('detay-kayit').textContent =
     'Kayıt: ' + tarihYaz(tarihMetni(new Date(musteri.olusturma)));
 
@@ -976,7 +1009,7 @@ async function musteriDetayiniCiz(musteriId, vurguSiparisId) {
     return `
       <li class="siparis ${durumSinifi(s.durum)} ${vurgu}">
         <div class="siparis-ust">
-          <span class="siparis-tarih"><span class="siparis-no">#${guvenli(s.no)}</span> ${tarihYaz(s.tarih)}</span>
+          <span class="siparis-tarih"><span class="siparis-no">#${guvenli(s.no)}</span>${sanalEtiketiHTML(s)} ${tarihYaz(s.tarih)}</span>
           <span class="siparis-tutar">${paraYaz(s.tutar)}</span>
         </div>
         <div class="siparis-detay">${parcaVeMetrekare(s)} × ${paraYaz(s.birimFiyat)}${teslim}</div>
@@ -1341,8 +1374,8 @@ document.getElementById('sanal-sil-butonu').addEventListener('click', olay =>
     const sonuc = await veriIslemi(sanalVerileriSil, SILME_HATASI);
     if (!sonuc) return;
     let mesaj = `Sanal veriler silindi: ${sonuc.musteri} müşteri, ${sonuc.siparis} sipariş, ${sonuc.gider} gider.`;
-    if (sonuc.korunanMusteri > 0) {
-      mesaj += `\n\n${sonuc.korunanMusteri} sanal müşteri, gerçek siparişleri olduğu için silinmedi.`;
+    if (sonuc.gercegeCevrilen > 0) {
+      mesaj += `\n\n${sonuc.gercegeCevrilen} sanal müşteri, gerçek siparişleri olduğu için silinmedi; artık gerçek müşteri.`;
     }
     alert(mesaj);
     await ayarlariCiz();
