@@ -24,6 +24,7 @@
    - guncelleme : son değiştirilme zamanı (milisaniye; silinme anı da buraya yazılır)
    - kaydeden   : kaydı yapan kullanıcı (şimdilik boş: null)
    - silindi    : true ise kayıt silinmiş sayılır
+   - sanal      : (isteğe bağlı) true ise gösterim için üretilmiş SANAL kayıttır (10. bölüm)
 
    Bölümler:
      1. Sabitler (anahtarlar, sipariş durumları)
@@ -35,6 +36,7 @@
      7. Ayarlar
      8. Yedekleme (tüm veri, yedek dosyası kontrolü)
      9. Eski verileri yeni yapıya uyarlama
+    10. Sanal (deneme) veriler
    ===================================================================== */
 
 
@@ -336,6 +338,7 @@ async function yedekKontrolEt(yedek) {
       if (!bosMu(k.guncelleme) && !sayiMi(k.guncelleme)) sorunlar.push(`${ad}: güncelleme zamanı geçersiz.`);
       if (!bosMu(k.kaydeden) && !metinMi(k.kaydeden)) sorunlar.push(`${ad}: "kaydeden" alanı geçersiz.`);
       if (!bosMu(k.silindi) && typeof k.silindi !== 'boolean') sorunlar.push(`${ad}: "silindi" alanı geçersiz.`);
+      if (!bosMu(k.sanal) && typeof k.sanal !== 'boolean') sorunlar.push(`${ad}: "sanal" alanı geçersiz.`);
     });
   };
 
@@ -516,4 +519,55 @@ async function veriyiDuzenle() {
     depoyaYaz(ANAHTAR_GIDERLER, giderler);
     depoyaYaz(ANAHTAR_AYARLAR, ayarlar);
   }
+}
+
+
+/* ===================== 10. SANAL (DENEME) VERİLER =====================
+   Gösterim için üretilen kayıtlarda "sanal: true" bulunur
+   (araclar/sanal-veri-uret.ps1 üretir; telefona "Yedekten Geri Yükle" ile yüklenir).
+   Bunlar gerçek veri değildir.
+   "Hiçbir kayıt gerçekten silinmez" kuralının TEK istisnası buradadır:
+   sanal kayıtlar Ayarlar > "Sanal Verileri Sil" ile KALICI olarak silinir.
+   ===================================================================== */
+
+// Cihazdaki sanal kayıt sayıları (silindi işaretli olanlar dahil)
+async function sanalKayitSayilari() {
+  const say = anahtar => depodanOku(anahtar, []).filter(k => k && k.sanal === true).length;
+  return {
+    musteri: say(ANAHTAR_MUSTERILER),
+    siparis: say(ANAHTAR_SIPARISLER),
+    gider: say(ANAHTAR_GIDERLER)
+  };
+}
+
+// Sanal kayıtları KALICI olarak siler; gerçek (sanal olmayan) kayıtlara dokunmaz.
+// Gerçek siparişi olan sanal müşteri SİLİNMEZ (gerçek siparişin sahibi kaybolmasın).
+// Sonuç: { musteri, siparis, gider, korunanMusteri } (silinen sayıları) veya null.
+// Yarıda kalırsa eski hal geri konur.
+async function sanalVerileriSil() {
+  const musteriler = depodanOku(ANAHTAR_MUSTERILER, []);
+  const siparisler = depodanOku(ANAHTAR_SIPARISLER, []);
+  const giderler = depodanOku(ANAHTAR_GIDERLER, []);
+  const sanalMi = k => k && k.sanal === true;
+
+  // Gerçek siparişlerin sahibi olan müşteriler korunur
+  const gercekSiparisSahipleri = new Set(siparisler.filter(s => !sanalMi(s)).map(s => s.musteriId));
+  const kalanMusteriler = musteriler.filter(m => !sanalMi(m) || gercekSiparisSahipleri.has(m.id));
+  const kalanSiparisler = siparisler.filter(s => !sanalMi(s));
+  const kalanGiderler = giderler.filter(g => !sanalMi(g));
+
+  const eskiHal = depoAnlikGoruntu([ANAHTAR_MUSTERILER, ANAHTAR_SIPARISLER, ANAHTAR_GIDERLER]);
+  const tamam = depoyaYaz(ANAHTAR_SIPARISLER, kalanSiparisler) &&
+    depoyaYaz(ANAHTAR_MUSTERILER, kalanMusteriler) &&
+    depoyaYaz(ANAHTAR_GIDERLER, kalanGiderler);
+  if (!tamam) {
+    depoyuGeriYukle(eskiHal);
+    return null;
+  }
+  return {
+    musteri: musteriler.length - kalanMusteriler.length,
+    siparis: siparisler.length - kalanSiparisler.length,
+    gider: giderler.length - kalanGiderler.length,
+    korunanMusteri: kalanMusteriler.filter(sanalMi).length
+  };
 }

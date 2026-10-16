@@ -1309,7 +1309,7 @@ const ayarlarFormu = document.getElementById('ayarlar-formu');
 
 async function ayarlariCiz() {
   const cizim = cizimBaslat();
-  const ayarlar = await ayarlariGetir();
+  const [ayarlar, sanalSayilar] = await Promise.all([ayarlariGetir(), sanalKayitSayilari()]);
   if (cizimEskidi(cizim)) return;
 
   ekranGoster('ekran-ayarlar', 'Ayarlar', '/yonetici', 'yonetici');
@@ -1317,8 +1317,36 @@ async function ayarlariCiz() {
   alanHatalariniTemizle(ayarlarFormu);
   yedekSorunlariniGoster([]);
   geriYuklemeAdiminiKapat();
+  sanalBolumunuCiz(sanalSayilar);
   surumuGoster();
 }
+
+// --- Sanal (deneme) veriler ---
+// Gösterim için yüklenen sanal kayıtlar ("sanal: true") varsa bölüm görünür.
+function sanalBolumunuCiz(sayilar) {
+  const toplam = sayilar.musteri + sayilar.siparis + sayilar.gider;
+  document.getElementById('sanal-bolumu').hidden = toplam === 0;
+  document.getElementById('sanal-sayilari').textContent =
+    `Bu cihazda gösterim için yüklenmiş sanal kayıtlar var: ${sayilar.musteri} müşteri, ` +
+    `${sayilar.siparis} sipariş, ${sayilar.gider} gider. Silerken gerçek kayıtlarınıza dokunulmaz.`;
+}
+
+document.getElementById('sanal-sil-butonu').addEventListener('click', olay =>
+  islemSirasinda(olay.currentTarget, async () => {
+    const sayilar = await sanalKayitSayilari();
+    const soru = `${sayilar.musteri} sanal müşteri, ${sayilar.siparis} sanal sipariş ve ${sayilar.gider} sanal gider ` +
+      'KALICI olarak silinecek (geri alınamaz).\n\nGerçek kayıtlarınıza dokunulmaz. Devam edilsin mi?';
+    if (!confirm(soru)) return;
+
+    const sonuc = await veriIslemi(sanalVerileriSil, SILME_HATASI);
+    if (!sonuc) return;
+    let mesaj = `Sanal veriler silindi: ${sonuc.musteri} müşteri, ${sonuc.siparis} sipariş, ${sonuc.gider} gider.`;
+    if (sonuc.korunanMusteri > 0) {
+      mesaj += `\n\n${sonuc.korunanMusteri} sanal müşteri, gerçek siparişleri olduğu için silinmedi.`;
+    }
+    alert(mesaj);
+    await ayarlariCiz();
+  }));
 
 ayarlarFormu.addEventListener('submit', olay => {
   olay.preventDefault();
